@@ -1,0 +1,4 @@
+streamlit
+FinanceDataReader
+pandas_ta
+scikit-learn
