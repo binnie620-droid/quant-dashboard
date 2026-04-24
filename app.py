@@ -11,7 +11,7 @@ warnings.filterwarnings('ignore')
 
 # [설정] 페이지 레이아웃
 st.set_page_config(page_title="KOSPI 50 AI 스윙 봇", layout="wide")
-st.title("📈 KOSPI Top 50 AI 스윙 트레이딩 시스템")
+st.title("📈 KOSPI 50 AI 스윙 매매 시스템")
 
 # [로직] 데이터 수집 및 모델 학습 (캐싱 적용)
 @st.cache_data(ttl=3600)
@@ -75,7 +75,7 @@ def style_returns(val):
             return ''
     return ''
 
-tab1, tab2 = st.tabs(["🎯 오늘의 추천 종목", "📊 과거 성과 매트릭스 (n*10)"])
+tab1, tab2 = st.tabs(["🎯 오늘의 추천 종목", "📊 과거 성과 매트릭스"])
 
 with tab1:
     st.subheader(f"📅 분석 기준일: {datetime.now().strftime('%Y-%m-%d')}")
