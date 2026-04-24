@@ -102,39 +102,64 @@ with tab1:
         st.info("😴 현재 확신도 55%를 넘는 종목이 없습니다. 현금을 보유하며 관망하세요.")
 
 with tab2:
-    st.subheader("🕵️‍♂️ AI 추천 이후 실제 수익률 추적")
-    st.write("지난 10거래일간 AI가 55% 이상의 확신으로 추천했던 종목들의 실시간 수익 현황입니다.")
+    st.subheader("🕵️‍♂️ AI 추천 이후 실시간 수익률 매트릭스")
+    st.write("최근 15거래일 동안의 모든 추천 종목과 그 이후 진행 상황을 한눈에 확인합니다.")
     
     if st.button('매트릭스 정산 시작'):
-        with st.status("데이터를 전수 조사하고 색상을 입히는 중입니다...", expanded=True) as status:
+        with st.status("최근 15일치 데이터를 전수 조사 중입니다...", expanded=True) as status:
             matrix_rows = []
+            
+            # 최근 15거래일 전(-15)부터 어제(-1)까지 하루씩 훑습니다.
             for name, df in stock_dfs.items():
                 if len(df) < 30: continue
-                for i in range(20, 10, -1):
-                    past_row = df.iloc[[-i]]
-                    X_past = past_row[features].fillna(0)
-                    proba = model.predict_proba(X_past)[0, 1]
-                    
-                    if proba >= 0.55:
-                        entry_p = past_row['Close'].values[0]
-                        res = {'추천일': past_row.index[0].strftime('%m/%d'), '종목명': name, '확신도': f"{proba*100:.1f}%"}
-                        for d in range(1, 11):
-                            idx = -i + d
-                            if idx < 0:
-                                ret = (df.iloc[idx]['Close'] / entry_p - 1) * 100
-                                res[f"T+{d}"] = f"{ret:+.2f}%"
-                            else: res[f"T+{d}"] = "-"
-                        matrix_rows.append(res)
-            status.update(label="정산 및 시각화 완료!", state="complete", expanded=False)
+                
+                for i in range(15, 0, -1): # 15일 전 ~ 1일 전
+                    try:
+                        past_row = df.iloc[[-i]]
+                        X_past = past_row[features].fillna(0)
+                        proba = model.predict_proba(X_past)[0, 1]
+                        
+                        if proba >= 0.55:
+                            past_date = past_row.index[0].strftime('%m/%d')
+                            entry_p = past_row['Close'].values[0]
+                            
+                            res = {
+                                '추천일': past_date, 
+                                '종목명': name, 
+                                '확신도': f"{proba*100:.1f}%"
+                            }
+                            
+                            # 추천일 이후 1~10일간의 수익률을 계산하되, 
+                            # 미래 날짜는 "-"로 표시
+                            for d in range(1, 11):
+                                target_idx = -i + d # 추천 시점으로부터 d일 뒤의 인덱스
+                                
+                                # target_idx가 0보다 작아야 '과거~오늘' 데이터가 있는 것임
+                                if target_idx < 0:
+                                    current_val = df.iloc[target_idx]['Close']
+                                    ret = (current_val / entry_p - 1) * 100
+                                    res[f"T+{d}"] = f"{ret:+.2f}%"
+                                else:
+                                    # 아직 날짜가 오지 않았거나 오늘 데이터인 경우
+                                    res[f"T+{d}"] = "-"
+                                    
+                            matrix_rows.append(res)
+                    except:
+                        continue
+            
+            status.update(label="전체 종목 정산 완료!", state="complete", expanded=False)
 
         if matrix_rows:
-            df_m = pd.DataFrame(matrix_rows).sort_values(by='추천일', ascending=False)
-            # 🎨 스타일 적용 핵심 코드: 모든 셀에 대해 style_returns 함수 적용
-            st.dataframe(df_m.style.map(style_returns), use_container_width=True, hide_index=True)
+            # 추천일 기준으로 정렬하여 최신 추천이 맨 위로 오게 함
+            df_m = pd.DataFrame(matrix_rows).sort_values(by=['추천일'], ascending=False)
+            
+            # 스타일 적용 (컬러링)
+            try:
+                styled_df = df_m.style.map(style_returns)
+            except:
+                styled_df = df_m.style.applymap(style_returns)
+                
+            st.dataframe(styled_df, use_container_width=True, hide_index=True)
+            st.caption("💡 T+n: 추천일로부터 n거래일 지난 시점의 누적 수익률 (미래 날짜는 '-' 표시)")
         else:
-            st.warning("⚠️ 최근 10거래일 동안 AI 확신도 55%를 넘긴 추천 종목이 없었습니다.")
-
-st.sidebar.markdown("---")
-st.sidebar.write("✅ **색상 가이드**")
-st.sidebar.write("🔴 **빨간색**: 추천가 대비 수익 중")
-st.sidebar.write("🔵 **파란색**: 추천가 대비 손실 중")
+            st.warning("⚠️ 최근 15거래일 동안 확신도 55%를 넘긴 종목이 없습니다.")
