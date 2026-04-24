@@ -1,4 +1,6 @@
 streamlit
-FinanceDataReader
+finance-datareader
 pandas_ta
 scikit-learn
+pandas
+numpy
