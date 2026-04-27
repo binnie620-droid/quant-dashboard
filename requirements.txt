@@ -1,8 +1,0 @@
-streamlit
-finance-datareader
-pandas_ta
-scikit-learn
-pandas
-numpy
-pykrx
-setuptools
