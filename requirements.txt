@@ -2,7 +2,7 @@ pandas
 numpy
 requests
 finance-datareader
-git+https://github.com/twopirllc/pandas-ta.git
+pandas-ta-classic
 lightgbm
 matplotlib
 python-dotenv
