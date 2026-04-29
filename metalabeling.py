@@ -55,3 +55,5 @@
                     vintage.append(rets)
     
     if vintage: pd.DataFrame(vintage).to_csv('vintage_performance.csv', index=False)
+    # metalabeling.py 의 export_targets 저장 직전에 추가
+    for t in export_targets: print(f"분석 결과: {t['name']} - 점수: {t['score']}")
