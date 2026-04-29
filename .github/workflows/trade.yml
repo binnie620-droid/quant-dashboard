@@ -1,0 +1,41 @@
+name: MITSUDA Daily Auto-Run
+
+on:
+  schedule:
+    # ⏰ 한국 시간(KST) 아침 8시 50분 = UTC 시간 밤 11시 50분
+    # 월요일~금요일 한국장 열리기 10분 전에 실행되도록 세팅 (UTC 기준 일요일~목요일)
+    - cron: '50 23 * * 0-4'
+  
+  # 🔘 수동 실행 버튼 (보스가 테스트하고 싶을 때 언제든 누를 수 있는 버튼)
+  workflow_dispatch: 
+
+jobs:
+  trade:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 1. 저장소 코드 불러오기
+      uses: actions/checkout@v3
+
+    - name: 2. 파이썬 3.10 환경 세팅
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: 3. 필요 라이브러리 설치 (requirements.txt)
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: 4. [뇌 가동] MITSUDA 전략 엔진 실행
+      env:
+        KIS_MOCK_APP_KEY: ${{ secrets.KIS_MOCK_APP_KEY }}
+        KIS_MOCK_APP_SECRET: ${{ secrets.KIS_MOCK_APP_SECRET }}
+      run: python metalabeling.py
+
+    - name: 5. [손 가동] UCHIDA 실행기 가동 및 텔레그램 보고
+      env:
+        KIS_MOCK_APP_KEY: ${{ secrets.KIS_MOCK_APP_KEY }}
+        KIS_MOCK_APP_SECRET: ${{ secrets.KIS_MOCK_APP_SECRET }}
+        KIS_CANO: ${{ secrets.KIS_CANO }}
+      run: python mitsuda_bot.py
