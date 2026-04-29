@@ -1,7 +1,7 @@
 pandas
 numpy
 requests
-FinanceDataReader
+finance-datareader
 pandas_ta
 lightgbm
 matplotlib
