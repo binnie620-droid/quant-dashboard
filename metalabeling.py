@@ -4,7 +4,7 @@ import requests
 import json
 from datetime import datetime, timedelta
 import FinanceDataReader as fdr
-import pandas_ta as ta
+import pandas_ta_classic as ta
 from lightgbm import LGBMClassifier
 import warnings
 import os
