@@ -40,6 +40,7 @@ def get_all_data():
             df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
             df['MFI'] = ta.mfi(df['High'], df['Low'], df['Close'], df['Volume'], length=14)
             
+            # [보스 대원칙: 트리플 배리어] 7일 내 4% 수익 & 손절가(-2*ATR) 터치 안 함
             entry_p = df['Open'].shift(-1)
             stop_level = entry_p - (df['ATR'] * 2.0)
             df['Target'] = np.where((df['High'].rolling(7).max().shift(-7) / entry_p - 1.0 >= 0.04) & 
@@ -59,43 +60,51 @@ def run_mitsuda_engine():
     curr = macro_df.iloc[-1]
     is_bull = curr['KOSPI'] > curr['KOSPI_MA20']
     
+    # [보스 최적 수치: 0.62]
     if curr['VIX'] >= v_r: zone, threshold = "🔴 RED", 0.95
     elif curr['VIX'] >= v_y or not is_bull: zone, threshold = "🟡 YELLOW", 0.75
-    else: zone, threshold = "🟢 GREEN", 0.62 # 보스의 최적값
+    else: zone, threshold = "🟢 GREEN", 0.62 
 
-    # [수정] 학습은 철저히 15일 전 데이터까지만 (미래 차단)
+    # [수정: T-15 학습] 정답이 나온 과거 데이터로만 공부
     model = LGBMClassifier(n_estimators=200, class_weight='balanced', random_state=42, verbose=-1)
     train_df = all_combined[all_combined.index <= (TODAY - timedelta(days=15))].dropna()
     model.fit(train_df[features], train_df['Target'])
 
+    # [예측: T-1 데이터 활용]
     export_targets = []
     for code, name in stocks.items():
-        df = data_list.get(code)
-        row = df.iloc[[-1]] # 어제(T-1) 데이터로 오늘 예측
+        row = data_list.get(code).iloc[[-1]]
         if row['Is_Valid'].values[0] and "RED" not in zone:
             p = model.predict_proba(row[features])[0][1]
             if p >= threshold:
                 kelly_f = max(0, ((1.5 * p) - (1 - p)) / 1.5)
-                export_targets.append({"code": code, "name": name, "score": round(p, 4), "kelly_fraction": round(kelly_f / 2, 4), "price": int(row['Close'].values[0]), "atr": float(row['ATR'].values[0])})
+                export_targets.append({
+                    "code": code, "name": name, "score": round(p, 4), 
+                    "kelly_fraction": round(kelly_f / 2, 4), 
+                    "price": int(row['Close'].values[0]), "atr": float(row['ATR'].values[0])
+                })
 
     with open('meta_target_list.json', 'w', encoding='utf-8') as f:
         json.dump({"date": TODAY.strftime("%Y-%m-%d"), "zone": zone, "targets": export_targets[:3]}, f, ensure_ascii=False, indent=4)
 
-    # [추가] PDF 보고서용 과거 성과 추적 (Vintage)
+    # [복구: Vintage 성과 추적] PDF용 장부 만들기
     vintage = []
     all_dates = sorted(macro_df.index.unique())
     for t_date in all_dates[-10:]:
         for code, name in stocks.items():
             df = data_list[code]
             row = df[df.index == t_date]
-            if not row.empty and row['Is_Valid'].values[0] and model.predict_proba(row[features])[0][1] > 0.62:
-                rets = {"날짜": t_date.strftime('%m/%d'), "종목": name}
-                f_dates = [d for d in all_dates if d > t_date][:10]
-                entry = df[df.index == f_dates[0]]['Open'].values[0] if f_dates else None
-                if entry:
-                    for j, f_d in enumerate(f_dates, 1):
-                        rets[f"D+{j}"] = round(((df[df.index == f_d]['Close'].values[0]/entry)-1)*100, 1)
-                    vintage.append(rets)
+            if not row.empty and row['Is_Valid'].values[0]:
+                p_val = model.predict_proba(row[features])[0][1]
+                if p_val > 0.62:
+                    rets = {"날짜": t_date.strftime('%m/%d'), "종목": name}
+                    future_dates = [d for d in all_dates if d > t_date][:10]
+                    entry = df[df.index == future_dates[0]]['Open'].values[0] if future_dates else None
+                    if entry:
+                        for j, f_d in enumerate(future_dates, 1):
+                            c_p = df[df.index == f_d]['Close'].values[0]
+                            rets[f"D+{j}"] = round(((c_p/entry)-1)*100, 1)
+                        vintage.append(rets)
     if vintage: pd.DataFrame(vintage).to_csv('vintage_performance.csv', index=False)
 
 if __name__ == "__main__":
