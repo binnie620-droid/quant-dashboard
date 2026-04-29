@@ -5,7 +5,6 @@ on:
     - cron: '50 23 * * 0-4'
   workflow_dispatch: 
 
-# 노란색 경고창(Node.js 20) 안 뜨게 하는 마법의 주문
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -24,7 +23,6 @@ jobs:
 
     - name: 3. 필요 라이브러리 설치 (requirements.txt)
       run: |
-        python -m pip install --upgrade pip
         pip install -r requirements.txt
 
     - name: 4. [뇌 가동] MITSUDA 전략 엔진 실행
