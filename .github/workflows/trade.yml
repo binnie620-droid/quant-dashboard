@@ -11,29 +11,24 @@ env:
 jobs:
   trade:
     runs-on: ubuntu-latest
-
     steps:
     - name: 1. 저장소 코드 불러오기
       uses: actions/checkout@v4
-
     - name: 2. 파이썬 3.10 환경 세팅
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
-
     - name: 3. 한글 폰트 및 라이브러리 설치
       run: |
         sudo apt-get update
         sudo apt-get install -y fonts-nanum
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-
     - name: 4. [뇌 가동] MITSUDA 전략 엔진 실행
       env:
         KIS_MOCK_APP_KEY: ${{ secrets.KIS_MOCK_APP_KEY }}
         KIS_MOCK_APP_SECRET: ${{ secrets.KIS_MOCK_APP_SECRET }}
       run: python metalabeling.py
-
     - name: 5. [손 가동] MITSUDA 실행기 가동 및 텔레그램 보고
       env:
         KIS_MOCK_APP_KEY: ${{ secrets.KIS_MOCK_APP_KEY }}
