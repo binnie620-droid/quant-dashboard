@@ -2,7 +2,7 @@ pandas
 numpy
 requests
 finance-datareader
-pandas_ta
+pandas-ta
 lightgbm
 matplotlib
 python-dotenv
