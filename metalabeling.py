@@ -66,7 +66,7 @@ def run_mitsuda_engine():
     curr = macro_df.iloc[-1]
     if curr['VIX'] >= v_r: zone, threshold = "🔴 RED", 0.95
     elif curr['VIX'] >= v_y or curr['KOSPI'] < curr['KOSPI_MA20']: zone, threshold = "🟡 YELLOW", 0.75
-    else: zone, threshold = "🟢 GREEN", 0.62 
+    else: zone, threshold = "🟢 GREEN", 0.68 
 
     export_targets = []
     for code, name in stocks.items():
@@ -110,7 +110,7 @@ def run_mitsuda_engine():
             multiplier = 2.0
         else: 
             pit_zone = "🟢 GREEN"
-            pit_threshold = 0.62
+            pit_threshold = 0.68
             multiplier = 2.0
 
         for code, name in stocks.items():
@@ -119,7 +119,7 @@ def run_mitsuda_engine():
             if not row.empty and row['Is_Valid'].values[0] and pit_zone != "🔴 RED": # RED존은 레포트에서도 사냥 금지
                 p_val = m_pit.predict_proba(row[features])[0][1]
                 
-                # [수정] 고정 0.62가 아닌, 과거 당시 존의 깐깐한 문턱(pit_threshold)을 통과했는지 검사
+                # [수정] 고정 0.68가 아닌, 과거 당시 존의 깐깐한 문턱(pit_threshold)을 통과했는지 검사
                 if p_val >= pit_threshold:
                     rets = {"날짜": t_date.strftime('%m/%d'), "종목": name}
                     future_dates = [d for d in all_dates if d > t_date][:10]
