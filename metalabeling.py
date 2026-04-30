@@ -38,7 +38,6 @@ def get_all_data():
             df['MA20'] = ta.sma(df['Close'], length=20)
             df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
             df['MFI'] = ta.mfi(df['High'], df['Low'], df['Close'], df['Volume'], length=14)
-            # [보스 지시] 20일선 이격도 피처 보존
             df['Dist_MA20'] = (df['Close'] / df['MA20']) - 1.0 
             
             entry_p = df['Open'].shift(-1)
@@ -78,7 +77,6 @@ def run_mitsuda_engine():
                 k_f = max(0, ((1.5 * p) - (1 - p)) / 1.5)
                 export_targets.append({"code": code, "name": name, "score": round(p, 4), "kelly": round(k_f/2, 4), "price": int(row['Close'].values[0]), "atr": float(row['ATR'].values[0])})
 
-    # [디버깅] 0.62 문턱에서 왜 탈락했는지 점수 확인용
     print(f"\n--- 오늘의 미츠다 분석 점수 (Threshold: {threshold}) ---")
     sorted_all = []
     for code, name in stocks.items():
@@ -92,13 +90,21 @@ def run_mitsuda_engine():
     with open('meta_target_list.json', 'w', encoding='utf-8') as f:
         json.dump({"date": TODAY.strftime("%Y-%m-%d"), "zone": zone, "targets": export_targets[:3]}, f, ensure_ascii=False, indent=4)
 
-    # --- [파트 2: 타임머신 성과 기록 (Vintage) - 시뮬레이션 강화] ---
+    # --- [파트 2: 타임머신 성과 기록 (Vintage)] ---
     vintage = []
     for t_date in all_dates[-10:]:
         m_pit = LGBMClassifier(n_estimators=100, class_weight='balanced', random_state=42, verbose=-1)
         train_pit = all_combined[all_combined.index <= (t_date - timedelta(days=15))]
         if train_pit.empty: continue
         m_pit.fit(train_pit[features], train_pit['Target'])
+
+        # [보스 지시] 해당 시점의 시장 존에 따른 동적 손절 배수 결정
+        curr_pit = macro_df[macro_df.index <= t_date].iloc[-1]
+        if curr_pit['VIX'] >= v_r: pit_zone = "🔴 RED"
+        elif curr_pit['VIX'] >= v_y or curr_pit['KOSPI'] < curr_pit['KOSPI_MA20']: pit_zone = "🟡 YELLOW"
+        else: pit_zone = "🟢 GREEN"
+        
+        multiplier = 1.2 if pit_zone == "🔴 RED" else 2.0
 
         for code, name in stocks.items():
             df = data_list[code]
@@ -110,9 +116,8 @@ def run_mitsuda_engine():
                     future_dates = [d for d in all_dates if d > t_date][:10]
                     if not future_dates: continue
                     
-                    # [시뮬레이션]
                     entry_price = df[df.index == future_dates[0]]['Open'].values[0]
-                    current_stop_loss = entry_price - (row['ATR'].values[0] * 2.0)
+                    current_stop_loss = entry_price - (row['ATR'].values[0] * multiplier)
                     highest_price = entry_price
                     is_cut = False
                     
@@ -123,11 +128,9 @@ def run_mitsuda_engine():
                         f_row = df[df.index == f_d]
                         curr_low, curr_close, curr_high, curr_atr = f_row['Low'].values[0], f_row['Close'].values[0], f_row['High'].values[0], f_row['ATR'].values[0]
                         
-                        # 1. 트레일링 스탑 체크
                         if curr_low <= current_stop_loss:
                             rets[f"D+{j}"] = f"🛑{round(((current_stop_loss/entry_price)-1)*100, 1)}%"
                             is_cut = True
-                        # 2. 7일 타임컷 체크 (7일째 종가가 본전 이하일 때)
                         elif j == 7 and curr_close <= entry_price:
                             rets[f"D+{j}"] = f"✂️{round(((curr_close/entry_price)-1)*100, 1)}%"
                             is_cut = True
@@ -135,7 +138,7 @@ def run_mitsuda_engine():
                             rets[f"D+{j}"] = round(((curr_close/entry_price)-1)*100, 1)
                             if curr_high > highest_price:
                                 highest_price = curr_high
-                                current_stop_loss = highest_price - (curr_atr * 2.0)
+                                current_stop_loss = highest_price - (curr_atr * multiplier)
                     vintage.append(rets)
     
     if vintage: pd.DataFrame(vintage).to_csv('vintage_performance.csv', index=False)
