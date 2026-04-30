@@ -2,8 +2,10 @@ name: MITSUDA Daily Auto-Run
 
 on:
   schedule:
-    - cron: '50 23 * * 0-4'
-  workflow_dispatch: 
+    # 한국 시간(KST) 오전 11:00 = UTC 오전 02:00
+    # 월~금요일 작동을 위해 1-5 (Mon-Fri) 설정
+    - cron: '0 2 * * 1-5'
+  workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
