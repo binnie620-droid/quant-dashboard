@@ -87,7 +87,7 @@ def run_trading_cleanup(token, zone):
             code, name, qty = s['pdno'], s['prdt_name'], int(s['hldg_qty'])
             if qty <= 0: continue
             
-            entry_price, current_price, rate = float(s['pchs_avg_pric']), float(s['prpr']), float(s['evlu_pfit_rt'])
+            entry_price, current_price, rate = float(s['pchs_avg_pric']), float(s['prpr']), float(s['evlu_pfls_rt'])
             
             # 실시간 ATR 동적 계산
             df = fdr.DataReader(code, (datetime.now() - timedelta(days=40)).strftime("%Y-%m-%d"))
