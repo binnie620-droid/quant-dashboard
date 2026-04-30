@@ -3,7 +3,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
 from matplotlib.backends.backend_pdf import PdfPages
-from datetime import datetime
+from datetime import datetime, timedelta
+import FinanceDataReader as fdr
+import pandas_ta_classic as ta
 from dotenv import load_dotenv
 
 warnings.filterwarnings('ignore')
@@ -17,29 +19,12 @@ def get_token():
     res = requests.post(f"{URL_BASE}/oauth2/tokenP", data=json.dumps({"grant_type":"client_credentials","appkey":APP_KEY,"appsecret":APP_SECRET}))
     return res.json().get("access_token")
 
-# --- 🚨 [핵심 디버깅 추가] 예수금 조회 함수 ---
 def get_available_cash(token):
-    headers = {
-        "Content-Type": "application/json", 
-        "authorization": f"Bearer {token}", 
-        "appkey": APP_KEY, 
-        "appsecret": APP_SECRET, 
-        "tr_id": "VTTC8436R"
-    }
-    params = {
-        "CANO": CANO, 
-        "ACNT_PRDT_CD": "01", 
-        "EXPT_SETL_CMPD_DVSN_CD": "00", 
-        "INQR_DVSN_1": "00", 
-        "INQR_DVSN_2": "00",
-        "CTX_AREA_FK100": "",
-        "CTX_AREA_NK100": ""
-    }
+    headers = {"Content-Type": "application/json", "authorization": f"Bearer {token}", "appkey": APP_KEY, "appsecret": APP_SECRET, "tr_id": "VTTC8434R"} # [복구] 정상 서비스 코드
+    params = {"CANO": CANO, "ACNT_PRDT_CD": "01", "EXPT_SETL_CMPD_DVSN_CD": "00", "INQR_DVSN_1": "00", "INQR_DVSN_2": "00", "CTX_AREA_FK100": "", "CTX_AREA_NK100": ""}
     res = requests.get(f"{URL_BASE}/uapi/domestic-stock/v1/trading/inquire-balance", headers=headers, params=params)
-    
     res_json = res.json()
     print(f"💰 [잔고 조회 API 응답]: {res_json.get('msg1')}")
-    
     try:
         cash = int(res_json['output2'][0]['dnca_tot_amt'])
         print(f"💵 [보스의 실제 예수금]: {cash}원")
@@ -58,12 +43,41 @@ def execute_order(token, code, qty, side="buy"):
     headers = {"Content-Type":"application/json", "authorization":f"Bearer {token}", "appkey":APP_KEY, "appsecret":APP_SECRET, "tr_id":tr_id}
     data = {"CANO":CANO, "ACNT_PRDT_CD":"01", "PDNO":code, "ORD_DVSN":"01", "ORD_QTY":str(qty), "ORD_UNPR":"0"}
     res = requests.post(f"{URL_BASE}/uapi/domestic-stock/v1/trading/order-cash", headers=headers, data=json.dumps(data))
-    
     res_data = res.json()
-    if res_data.get('rt_cd') != '0':
-        print(f"🛑 [주문 거절] {code}: {res_data.get('msg1')}")
-        
+    if res_data.get('rt_cd') != '0': print(f"🛑 [주문 거절] {code}: {res_data.get('msg1')}")
     return res_data.get('rt_cd') == '0'
+
+# [보스 지시] 동적 ATR 손절 복구 (취소 후 매도)
+def run_trading_cleanup(token, zone):
+    headers = {"Content-Type":"application/json", "authorization":f"Bearer {token}", "appkey":APP_KEY, "appsecret":APP_SECRET, "tr_id":"VTTC8434R"}
+    params = {"CANO":CANO, "ACNT_PRDT_CD":"01", "PRDT_TYPE_CD":"01", "CTX_AREA_FK100":"", "CTX_AREA_NK100":""}
+    res = requests.get(f"{URL_BASE}/uapi/domestic-stock/v1/trading/inquire-balance", headers=headers, params=params)
+    
+    sell_log = []
+    multiplier = 1.2 if zone == "🔴 RED" else 2.0
+    print(f"🛡️ [보유종목 감시 시작] 적용 손절 배수: ATR {multiplier}배")
+    
+    try:
+        for s in res.json().get('output1', []):
+            code, name, qty = s['pdno'], s['prdt_name'], int(s['hldg_qty'])
+            if qty <= 0: continue
+            
+            entry_price, current_price, rate = float(s['pchs_avg_pric']), float(s['prpr']), float(s['evlu_pfit_rt'])
+            
+            # 실시간 ATR 동적 계산
+            df = fdr.DataReader(code, (datetime.now() - timedelta(days=40)).strftime("%Y-%m-%d"))
+            if len(df) > 14:
+                df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+                current_atr = float(df['ATR'].iloc[-1])
+                stop_price = entry_price - (current_atr * multiplier)
+                
+                if current_price <= stop_price or rate >= 10.0:
+                    cancel_order(token, code)
+                    if execute_order(token, code, qty, "sell"):
+                        reason = f"ATR {multiplier}배 손절" if current_price <= stop_price else "익절"
+                        sell_log.append(f"🛑 {name} 매도 완료 ({reason})")
+    except Exception as e: print(f"🚨 [매도 감시 에러]: {e}")
+    return sell_log
 
 def create_pdf():
     if not os.path.exists('vintage_performance.csv'): return None
@@ -85,39 +99,45 @@ def create_pdf():
 
 def main():
     token = get_token()
-    if not token:
-        print("🚨 토큰 발급 실패")
-        return
+    if not token: return
         
+    try:
+        with open('meta_target_list.json', 'r', encoding='utf-8') as f: data = json.load(f)
+        zone = data.get('zone', '🟢 GREEN')
+    except: return
+
+    # 1. 매도 감시 및 취소 (존 전달)
+    sell_msgs = run_trading_cleanup(token, zone)
+    if sell_msgs: requests.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage", data={"chat_id":TG_CHAT_ID, "text":"\n".join(sell_msgs)})
+
+    # 2. 레포트 발송
     pdf = create_pdf()
     if pdf:
         with open(pdf, 'rb') as f: requests.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendDocument", data={"chat_id":TG_CHAT_ID}, files={"document":f})
         os.remove(pdf)
 
-    try:
-        with open('meta_target_list.json', 'r', encoding='utf-8') as f: data = json.load(f)
-    except: 
-        print("🚨 작전 지시서(JSON)를 찾을 수 없습니다.")
-        return
-
+    # 3. 매수 집행 및 보고서 작성
     buy_log = []
-    
-    # 내 계좌 진짜 돈 확인
+    target_log = [] # [보스 지시] 돈이 없어도 보고할 리스트
     total_cash = get_available_cash(token)
-    print(f"🔍 [오늘의 투자 가능 총액]: {total_cash}원")
     
     for t in data['targets']:
+        target_log.append(f"🎯 {t['name']} ({t['score']}점)")
         invest_amount = total_cash * t['kelly']
-        qty = int(invest_amount / t['price'])
-        
-        print(f"🎯 [타겟 확인] {t['name']} - 필요금액: {invest_amount}원 / 계산된 수량: {qty}주")
+        qty = int(invest_amount / t['price']) if t['price'] > 0 else 0
         
         if qty > 0:
             cancel_order(token, t['code']) 
             if execute_order(token, t['code'], qty, "buy"):
-                buy_log.append(f"✅ {t['name']} ({t['score']}점) {qty}주 매수 (비중: {round(t['kelly']*100, 1)}%)")
+                buy_log.append(f"✅ {t['name']} {qty}주 매수")
     
-    msg = f"🐆 MITSUDA 작전 보고 ({data['date']})\n존: {data['zone']}\n\n" + ("\n".join(buy_log) if buy_log else "매수 체결 내역 없음 (관망).")
+    # 보고서 조립
+    msg = f"🐆 MITSUDA 작전 보고 ({data['date']})\n존: {zone}\n\n"
+    msg += "--- 오늘의 타겟 (AI 추천) ---\n"
+    msg += ("\n".join(target_log) if target_log else "추천 종목 없음.") + "\n\n"
+    msg += "--- 실제 매수 체결 ---\n"
+    msg += ("\n".join(buy_log) if buy_log else "체결 내역 없음 (현금 부족 또는 관망).")
+    
     requests.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage", data={"chat_id":TG_CHAT_ID, "text":msg})
 
 if __name__ == "__main__":
