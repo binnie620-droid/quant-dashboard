@@ -21,12 +21,12 @@ def get_token():
 
 def get_available_cash(token):
     headers = {"Content-Type": "application/json", "authorization": f"Bearer {token}", "appkey": APP_KEY, "appsecret": APP_SECRET, "tr_id": "VTTC8434R"}
-    # 🚨 [수정] KIS VTTC8434R (모의 잔고조회) 정식 파라미터 규격으로 완벽 교체
+    # 🚨 [수정 완료] OFLN_YN 오타를 KIS 공식 규격인 OFL_YN으로 수정
     params = {
         "CANO": CANO,
         "ACNT_PRDT_CD": "01",
         "AFHR_FLPR_YN": "N",
-        "OFLN_YN": "N",
+        "OFL_YN": "N", 
         "INQR_DVSN": "02",
         "UNPR_DVSN": "01",
         "FUND_STTL_ICLD_YN": "N",
@@ -62,12 +62,12 @@ def execute_order(token, code, qty, side="buy"):
 
 def run_trading_cleanup(token, zone):
     headers = {"Content-Type":"application/json", "authorization":f"Bearer {token}", "appkey":APP_KEY, "appsecret":APP_SECRET, "tr_id":"VTTC8434R"}
-    # 🚨 [수정] 매도 감시 쪽 잔고조회도 정식 파라미터 규격으로 통일
+    # 🚨 [수정 완료] 매도 감시 쪽 잔고조회 파라미터 동일하게 오타 수정
     params = {
         "CANO": CANO,
         "ACNT_PRDT_CD": "01",
         "AFHR_FLPR_YN": "N",
-        "OFLN_YN": "N",
+        "OFL_YN": "N",
         "INQR_DVSN": "02",
         "UNPR_DVSN": "01",
         "FUND_STTL_ICLD_YN": "N",
@@ -131,7 +131,7 @@ def main():
         zone = data.get('zone', '🟢 GREEN')
     except: return
 
-    # 1. 매도 감시 및 취소 (존 전달)
+    # 1. 매도 감시 및 취소
     sell_msgs = run_trading_cleanup(token, zone)
     if sell_msgs: requests.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage", data={"chat_id":TG_CHAT_ID, "text":"\n".join(sell_msgs)})
 
