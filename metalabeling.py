@@ -98,20 +98,29 @@ def run_mitsuda_engine():
         if train_pit.empty: continue
         m_pit.fit(train_pit[features], train_pit['Target'])
 
-        # [보스 지시] 해당 시점의 시장 존에 따른 동적 손절 배수 결정
+        # [보스 지시] 과거 해당 시점의 시장 존에 따른 동적 손절 배수 & 확률 문턱 적용
         curr_pit = macro_df[macro_df.index <= t_date].iloc[-1]
-        if curr_pit['VIX'] >= v_r: pit_zone = "🔴 RED"
-        elif curr_pit['VIX'] >= v_y or curr_pit['KOSPI'] < curr_pit['KOSPI_MA20']: pit_zone = "🟡 YELLOW"
-        else: pit_zone = "🟢 GREEN"
-        
-        multiplier = 1.2 if pit_zone == "🔴 RED" else 2.0
+        if curr_pit['VIX'] >= v_r: 
+            pit_zone = "🔴 RED"
+            pit_threshold = 0.95
+            multiplier = 1.2
+        elif curr_pit['VIX'] >= v_y or curr_pit['KOSPI'] < curr_pit['KOSPI_MA20']: 
+            pit_zone = "🟡 YELLOW"
+            pit_threshold = 0.75
+            multiplier = 2.0
+        else: 
+            pit_zone = "🟢 GREEN"
+            pit_threshold = 0.62
+            multiplier = 2.0
 
         for code, name in stocks.items():
             df = data_list[code]
             row = df[df.index == t_date]
-            if not row.empty and row['Is_Valid'].values[0]:
+            if not row.empty and row['Is_Valid'].values[0] and pit_zone != "🔴 RED": # RED존은 레포트에서도 사냥 금지
                 p_val = m_pit.predict_proba(row[features])[0][1]
-                if p_val >= 0.62:
+                
+                # [수정] 고정 0.62가 아닌, 과거 당시 존의 깐깐한 문턱(pit_threshold)을 통과했는지 검사
+                if p_val >= pit_threshold:
                     rets = {"날짜": t_date.strftime('%m/%d'), "종목": name}
                     future_dates = [d for d in all_dates if d > t_date][:10]
                     if not future_dates: continue
