@@ -30,6 +30,30 @@ def execute_order(token, code, qty, side="buy"):
     res = requests.post(f"{URL_BASE}/uapi/domestic-stock/v1/trading/order-cash", headers=headers, data=json.dumps(data))
     return res.json().get('rt_cd') == '0'
 
+# [추가] 실시간 계좌 예수금(주문 가능 현금) 조회 함수
+def get_available_cash(token):
+    headers = {
+        "Content-Type": "application/json", 
+        "authorization": f"Bearer {token}", 
+        "appkey": APP_KEY, 
+        "appsecret": APP_SECRET, 
+        "tr_id": "VTTC8436R"  # 모의계좌 잔고조회 TR ID (실전은 TTTC8436R)
+    }
+    params = {
+        "CANO": CANO, 
+        "ACNT_PRDT_CD": "01", 
+        "EXPT_SETL_CMPD_DVSN_CD": "00", 
+        "INQR_DVSN_1": "00", 
+        "INQR_DVSN_2": "00"
+    }
+    res = requests.get(f"{URL_BASE}/uapi/domestic-stock/v1/trading/inquire-balance", headers=headers, params=params)
+    try:
+        # dnca_tot_amt: 예수금총액 (주문 가능한 실제 현금)
+        cash = int(res.json()['output2'][0]['dnca_tot_amt'])
+        return cash
+    except:
+        return 0 # 에러 시 0원 처리
+
 # [복구] 어깨 매도 및 취소 로직
 def run_trading_cleanup(token):
     headers = {"Content-Type":"application/json", "authorization":f"Bearer {token}", "appkey":APP_KEY, "appsecret":APP_SECRET, "tr_id":"VTRP6641R"}
@@ -85,9 +109,19 @@ def main():
     except: return
 
     buy_log = []
+    
+    # 1. 오늘자 내 계좌의 찐 현금을 파악한다
+    total_cash = get_available_cash(token) 
+    
     for t in data['targets']:
-        qty = int((10000000 * t['kelly']) / t['price'])
+        # 2. 내 실제 현금에 켈리 비중을 곱해서 투자 금액을 산정한다
+        invest_amount = total_cash * t['kelly'] 
+        qty = int(invest_amount / t['price'])
+        
         if qty > 0:
+            cancel_order(token, t['code'])
+            if execute_order(token, t['code'], qty, "buy"):
+                buy_log.append(f"✅ {t['name']} ({t['score']}점) {qty}주 매수 (비중: {round(t['kelly']*100, 1)}%)")
             cancel_all_orders(token, t['code'])
             if execute_order(token, t['code'], qty, "buy"):
                 buy_log.append(f"✅ {t['name']} ({t['score']}점) {qty}주 매수")
