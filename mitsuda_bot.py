@@ -11,7 +11,7 @@ load_dotenv()
 
 APP_KEY, APP_SECRET, CANO = os.getenv("KIS_MOCK_APP_KEY"), os.getenv("KIS_MOCK_APP_SECRET"), os.getenv("KIS_CANO")
 TG_TOKEN, TG_CHAT_ID = "8754772387:AAEAQYSLm2EReLFR6dRrQz62VbTntH_ZYk4", "8167010481"
-URL_BASE = "https://openapi.koreainvestment.com:9443"
+URL_BASE = "https://openapivts.koreainvestment.com:29443"
 
 def get_token():
     res = requests.post(f"{URL_BASE}/oauth2/tokenP", data=json.dumps({"grant_type":"client_credentials","appkey":APP_KEY,"appsecret":APP_SECRET}))
