@@ -2,9 +2,8 @@ name: MITSUDA Daily Auto-Run
 
 on:
   schedule:
-    # 한국 시간(KST) 오전 11:00 = UTC 오전 02:00
-    # 월~금요일 작동을 위해 1-5 (Mon-Fri) 설정
-    - cron: '0 2 * * 1-5'
+    # 한국 시간(KST) 오후 15:15 = UTC 오전 06:15 (종가 매매 최적 시간)
+    - cron: '15 6 * * 1-5'
   workflow_dispatch:
 
 env:
