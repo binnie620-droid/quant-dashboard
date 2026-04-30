@@ -20,8 +20,21 @@ def get_token():
     return res.json().get("access_token")
 
 def get_available_cash(token):
-    headers = {"Content-Type": "application/json", "authorization": f"Bearer {token}", "appkey": APP_KEY, "appsecret": APP_SECRET, "tr_id": "VTTC8434R"} # [복구] 정상 서비스 코드
-    params = {"CANO": CANO, "ACNT_PRDT_CD": "01", "EXPT_SETL_CMPD_DVSN_CD": "00", "INQR_DVSN_1": "00", "INQR_DVSN_2": "00", "CTX_AREA_FK100": "", "CTX_AREA_NK100": ""}
+    headers = {"Content-Type": "application/json", "authorization": f"Bearer {token}", "appkey": APP_KEY, "appsecret": APP_SECRET, "tr_id": "VTTC8434R"}
+    # 🚨 [수정] KIS VTTC8434R (모의 잔고조회) 정식 파라미터 규격으로 완벽 교체
+    params = {
+        "CANO": CANO,
+        "ACNT_PRDT_CD": "01",
+        "AFHR_FLPR_YN": "N",
+        "OFLN_YN": "N",
+        "INQR_DVSN": "02",
+        "UNPR_DVSN": "01",
+        "FUND_STTL_ICLD_YN": "N",
+        "FNCG_AMT_AUTO_RDPT_YN": "N",
+        "PRCS_DVSN": "01",
+        "CTX_AREA_FK100": "",
+        "CTX_AREA_NK100": ""
+    }
     res = requests.get(f"{URL_BASE}/uapi/domestic-stock/v1/trading/inquire-balance", headers=headers, params=params)
     res_json = res.json()
     print(f"💰 [잔고 조회 API 응답]: {res_json.get('msg1')}")
@@ -47,10 +60,22 @@ def execute_order(token, code, qty, side="buy"):
     if res_data.get('rt_cd') != '0': print(f"🛑 [주문 거절] {code}: {res_data.get('msg1')}")
     return res_data.get('rt_cd') == '0'
 
-# [보스 지시] 동적 ATR 손절 복구 (취소 후 매도)
 def run_trading_cleanup(token, zone):
     headers = {"Content-Type":"application/json", "authorization":f"Bearer {token}", "appkey":APP_KEY, "appsecret":APP_SECRET, "tr_id":"VTTC8434R"}
-    params = {"CANO":CANO, "ACNT_PRDT_CD":"01", "PRDT_TYPE_CD":"01", "CTX_AREA_FK100":"", "CTX_AREA_NK100":""}
+    # 🚨 [수정] 매도 감시 쪽 잔고조회도 정식 파라미터 규격으로 통일
+    params = {
+        "CANO": CANO,
+        "ACNT_PRDT_CD": "01",
+        "AFHR_FLPR_YN": "N",
+        "OFLN_YN": "N",
+        "INQR_DVSN": "02",
+        "UNPR_DVSN": "01",
+        "FUND_STTL_ICLD_YN": "N",
+        "FNCG_AMT_AUTO_RDPT_YN": "N",
+        "PRCS_DVSN": "01",
+        "CTX_AREA_FK100": "",
+        "CTX_AREA_NK100": ""
+    }
     res = requests.get(f"{URL_BASE}/uapi/domestic-stock/v1/trading/inquire-balance", headers=headers, params=params)
     
     sell_log = []
@@ -118,7 +143,7 @@ def main():
 
     # 3. 매수 집행 및 보고서 작성
     buy_log = []
-    target_log = [] # [보스 지시] 돈이 없어도 보고할 리스트
+    target_log = [] 
     total_cash = get_available_cash(token)
     
     for t in data['targets']:
