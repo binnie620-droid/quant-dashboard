@@ -2,7 +2,7 @@ name: MITSUDA Daily Auto-Run
 
 on:
   schedule:
-    # 한국 시간(KST) 오후 15:15 = UTC 오전 06:15 (종가 매매 최적 시간)
+    # 한국 시간(KST) 오후 15:00 = UTC 오전 06:00 (서버 지연 버퍼 확보)
     - cron: '0 6 * * 1-5'
   workflow_dispatch:
 
