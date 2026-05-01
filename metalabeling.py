@@ -138,7 +138,10 @@ def run_mitsuda_engine():
                         curr_low, curr_close, curr_high, curr_atr = f_row['Low'].values[0], f_row['Close'].values[0], f_row['High'].values[0], f_row['ATR'].values[0]
                         
                         if curr_low <= current_stop_loss:
-                            rets[f"D+{j}"] = f"[손절]{round(((current_stop_loss/entry_price)-1)*100, 1)}%"
+                            profit_rate = round(((current_stop_loss/entry_price)-1)*100, 1)
+                            # 최종 수익률이 0보다 크면 추세익절, 아니면 손절로 논리적 구분
+                            label = "[추세익절]" if profit_rate > 0 else "[손절]"
+                            rets[f"D+{j}"] = f"{label}{profit_rate}%"
                             is_cut = True
                         elif j == 7 and curr_close <= entry_price:
                             rets[f"D+{j}"] = f"[타임]{round(((curr_close/entry_price)-1)*100, 1)}%"
