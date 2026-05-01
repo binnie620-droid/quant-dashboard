@@ -138,10 +138,10 @@ def run_mitsuda_engine():
                         curr_low, curr_close, curr_high, curr_atr = f_row['Low'].values[0], f_row['Close'].values[0], f_row['High'].values[0], f_row['ATR'].values[0]
                         
                         if curr_low <= current_stop_loss:
-                            rets[f"D+{j}"] = f"🛑{round(((current_stop_loss/entry_price)-1)*100, 1)}%"
+                            rets[f"D+{j}"] = f"[손절]{round(((current_stop_loss/entry_price)-1)*100, 1)}%"
                             is_cut = True
                         elif j == 7 and curr_close <= entry_price:
-                            rets[f"D+{j}"] = f"✂️{round(((curr_close/entry_price)-1)*100, 1)}%"
+                            rets[f"D+{j}"] = f"[타임]{round(((curr_close/entry_price)-1)*100, 1)}%"
                             is_cut = True
                         else:
                             rets[f"D+{j}"] = round(((curr_close/entry_price)-1)*100, 1)
