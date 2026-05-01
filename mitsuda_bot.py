@@ -124,12 +124,18 @@ def create_pdf():
 
 def main():
     token = get_token()
-    if not token: return
+    if not token: 
+        # [수술 1] 토큰 발급 실패 시 조용히 죽지 않고 보고
+        requests.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage", data={"chat_id":TG_CHAT_ID, "text":"🚨 [긴급] 한국투자증권 API 출입증(토큰) 발급 실패. (휴장일 또는 서버 점검 의심)"})
+        return
         
     try:
         with open('meta_target_list.json', 'r', encoding='utf-8') as f: data = json.load(f)
         zone = data.get('zone', '🟢 GREEN')
-    except: return
+    except: 
+        # [수술 2] 작전 지시서가 없을 때 조용히 죽지 않고 보고
+        requests.post(f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage", data={"chat_id":TG_CHAT_ID, "text":"🚨 [긴급] 작전 지시서(meta_target_list.json)를 찾을 수 없습니다. 뇌(metalabeling)가 기절했습니다."})
+        return
 
     # 1. 매도 감시 및 취소
     sell_msgs = run_trading_cleanup(token, zone)
