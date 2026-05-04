@@ -1,9 +1,0 @@
-pandas
-numpy
-requests
-finance-datareader
-pandas-ta-classic
-scikit-learn
-lightgbm
-matplotlib
-python-dotenv
