@@ -533,8 +533,15 @@
 // ============================================================
 // 상수
 // ============================================================
-const ASSETS = ['QQQ', 'SCHD', 'GLD', 'IEF'];
-const CODES  = { QQQ: '133690', SCHD: '458730', GLD: '411060', IEF: '305080' };
+const ASSETS = ['QQQ', 'SCHD', 'GLD', 'IEF', 'SOFR'];
+const CODES  = { QQQ: '133690', SCHD: '458730', GLD: '411060', IEF: '305080', SOFR: '456610' };
+const NAMES  = {
+  QQQ:  'TIGER 미국나스닥100 (133690)',
+  SCHD: 'TIGER 미국배당다우존스 (458730)',
+  GLD:  'ACE KRX금현물 (411060)',
+  IEF:  'TIGER 미국채10년선물 (305080)',
+  SOFR: 'TIGER 달러SOFR금리액티브 (456610)',
+};
 const WEIGHT_MAP = {
   ATTACK:  { QQQ: 0.75, SCHD: 0.15, GLD: 0.05, IEF: 0.05, SOFR: 0.0 },
   DEFENSE: { QQQ: 0.25, SCHD: 0.20, GLD: 0.20, IEF: 0.25, SOFR: 0.10 },
