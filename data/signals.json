@@ -1,19 +1,50 @@
 {
   "date": "2026-05-15",
-  "updated": "2026-05-15 16:30",
+  "updated": "2026-05-16 23:07",
   "regime": "ATTACK",
   "score": 0.0,
   "signals": {
-    "cpi_z":         {"value": 0.90, "threshold": 2.3,   "op": ">", "triggered": false, "label": "CPI Z-score"},
-    "credit_spread": {"value": 1.66, "threshold": 3.5,   "op": ">", "triggered": false, "label": "신용스프레드"},
-    "t10y2y":        {"value": 0.48, "threshold": 0.0,   "op": "<", "triggered": false, "label": "10Y-2Y"},
-    "vix":           {"value": 17.26,"threshold": 22.0,  "op": ">", "triggered": false, "label": "VIX"},
-    "dist_ma200":    {"value": 0.1817,"threshold": -0.03, "op": "<", "triggered": false, "label": "QQQ MA200"}
+    "cpi_z": {
+      "value": 0.9023766114462767,
+      "threshold": 1.5,
+      "op": ">",
+      "triggered": false,
+      "label": "CPI Z-score"
+    },
+    "credit_spread": {
+      "value": 1.62,
+      "threshold": 3.5,
+      "op": ">",
+      "triggered": false,
+      "label": "신용스프레드"
+    },
+    "t10y2y": {
+      "value": 0.5,
+      "threshold": 0.0,
+      "op": "<",
+      "triggered": false,
+      "label": "10Y-2Y"
+    },
+    "vix": {
+      "value": 17.26,
+      "threshold": 22.0,
+      "op": ">",
+      "triggered": false,
+      "label": "VIX"
+    },
+    "dist_ma200": {
+      "value": 0.16249487635066373,
+      "threshold": -0.03,
+      "op": "<",
+      "triggered": false,
+      "label": "QQQ MA200"
+    }
   },
   "prices": {
-    "QQQ":  194920,
-    "SCHD": 15015,
-    "GLD":  31040,
-    "IEF":  13400
+    "QQQ": 194300.0,
+    "SCHD": 15125.0,
+    "GLD": 30495.0,
+    "IEF": 13430.0,
+    "SOFR": 64425.0
   }
 }
