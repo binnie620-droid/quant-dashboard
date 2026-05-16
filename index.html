@@ -770,7 +770,7 @@ function calcDeposit() {
     if (buyShares > 0) {
       html += `
         <div class="action-row">
-          <span class="action-buy">${a} <span style="color:var(--muted);font-size:11px">(${CODES[a]})</span></span>
+          <span class="action-buy">${NAMES[a]}</span>
           <span class="action-buy">+${buyShares}주 ${(buyCost/10000).toFixed(0)}만</span>
         </div>`;
     } else {
@@ -784,7 +784,7 @@ function calcDeposit() {
     if (buyShares > 0) {
       updateHtml += `
         <div style="margin-bottom:12px">
-          <label class="form-label">${a} 실매수가 / 수량</label>
+          <label class="form-label">${NAMES[a]} 실매수가 / 수량</label>
           <div class="input-row">
             <input class="form-input" type="number" id="buy-price-${a}" placeholder="${price.toFixed(0)}" value="${price.toFixed(0)}">
             <input class="form-input" type="number" id="buy-shares-${a}" placeholder="${buyShares}" value="${buyShares}">
