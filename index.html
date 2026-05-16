@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UCHIDA V3</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --border: #1e1e2e;
+    --text: #e8e8f0;
+    --muted: #5a5a7a;
+    --attack: #00e5a0;
+    --defense: #f5c842;
+    --crisis: #ff4466;
+    --accent: #6c63ff;
+    --mono: 'DM Mono', monospace;
+    --sans: 'Syne', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* 배경 노이즈 */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 24px 16px 80px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* 헤더 */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 32px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.3em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .logo span {
+    color: var(--accent);
+  }
+
+  .date-info {
+    text-align: right;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  /* 국면 카드 */
+  .regime-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .regime-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px; height: 100%;
+    background: var(--regime-color, var(--muted));
+  }
+
+  .regime-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.25em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .regime-name {
+    font-size: 36px;
+    font-weight: 800;
+    color: var(--regime-color, var(--text));
+    line-height: 1;
+    margin-bottom: 4px;
+    letter-spacing: -0.02em;
+  }
+
+  .regime-score {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* 신호 그리드 */
+  .signals-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .signal-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: border-color 0.2s;
+  }
+
+  .signal-item.on {
+    border-color: var(--crisis);
+    background: rgba(255, 68, 102, 0.05);
+  }
+
+  .signal-name {
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  .signal-val {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+  }
+
+  .signal-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+    margin-left: 8px;
+  }
+
+  .signal-item.on .signal-dot {
+    background: var(--crisis);
+    box-shadow: 0 0 6px var(--crisis);
+  }
+
+  /* 섹션 */
+  .section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  .section-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.25em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  /* 자산 행 */
+  .asset-row {
+    display: grid;
+    grid-template-columns: 48px 1fr auto auto;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .asset-row:last-child { border-bottom: none; }
+
+  .asset-ticker {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--accent);
+  }
+
+  .asset-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .asset-shares {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .asset-value {
+    font-family: var(--mono);
+    font-size: 13px;
+    text-align: right;
+  }
+
+  .asset-weight {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    text-align: right;
+    min-width: 40px;
+  }
+
+  .asset-weight.over { color: var(--crisis); }
+  .asset-weight.under { color: var(--defense); }
+
+  .pnl-positive { color: var(--attack); }
+  .pnl-negative { color: var(--crisis); }
+
+  /* 총 평가액 */
+  .total-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding-top: 14px;
+    margin-top: 4px;
+    border-top: 1px solid var(--border);
+  }
+
+  .total-label {
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+  }
+
+  .total-value {
+    font-family: var(--mono);
+    font-size: 20px;
+    font-weight: 500;
+  }
+
+  /* 입력 폼 */
+  .form-group {
+    margin-bottom: 12px;
+  }
+
+  .form-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  .form-input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .form-input:focus { border-color: var(--accent); }
+
+  .input-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  /* 버튼 */
+  .btn {
+    width: 100%;
+    padding: 13px;
+    border-radius: 8px;
+    border: none;
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 8px;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+  }
+
+  .btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
+
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* 매매 지시 */
+  .action-box {
+    background: rgba(108, 99, 255, 0.08);
+    border: 1px solid rgba(108, 99, 255, 0.3);
+    border-radius: 8px;
+    padding: 14px;
+    margin-top: 12px;
+  }
+
+  .action-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .action-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(108, 99, 255, 0.15);
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+
+  .action-row:last-child { border-bottom: none; }
+
+  .action-buy { color: var(--attack); }
+  .action-hold { color: var(--muted); }
+
+  /* 탭 */
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 4px;
+  }
+
+  .tab {
+    flex: 1;
+    padding: 8px;
+    border-radius: 7px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .tab.active {
+    background: var(--accent);
+    color: white;
+  }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* 알림 배너 */
+  .alert {
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    font-weight: 600;
+    display: none;
+  }
+
+  .alert.show { display: block; }
+  .alert-warning {
+    background: rgba(245, 200, 66, 0.1);
+    border: 1px solid rgba(245, 200, 66, 0.4);
+    color: var(--defense);
+  }
+
+  .alert-danger {
+    background: rgba(255, 68, 102, 0.1);
+    border: 1px solid rgba(255, 68, 102, 0.4);
+    color: var(--crisis);
+  }
+
+  /* 로딩 */
+  .loading {
+    text-align: center;
+    padding: 40px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  /* 스크롤바 */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- 헤더 -->
+  <div class="header">
+    <div>
+      <div class="logo">UCHIDA <span>V3</span></div>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px;font-family:var(--mono)" id="last-updated">—</div>
+    </div>
+    <div class="date-info" id="date-info">—</div>
+  </div>
+
+  <!-- 알림 배너 -->
+  <div class="alert alert-danger" id="alert-regime">
+    🚨 국면 전환 감지 — 리밸런싱 필요
+  </div>
+  <div class="alert alert-warning" id="alert-band">
+    ⚠ 비중 이탈 — 5% 밴드 초과
+  </div>
+
+  <!-- 국면 카드 -->
+  <div class="regime-card" id="regime-card">
+    <div class="regime-label">현재 국면</div>
+    <div class="regime-name" id="regime-name">—</div>
+    <div class="regime-score" id="regime-score">점수 —</div>
+  </div>
+
+  <!-- 신호 그리드 -->
+  <div class="signals-grid" id="signals-grid">
+    <div class="signal-item"><span class="signal-name">로딩중</span><span class="signal-dot"></span></div>
+    <div class="signal-item"><span class="signal-name">로딩중</span><span class="signal-dot"></span></div>
+    <div class="signal-item"><span class="signal-name">로딩중</span><span class="signal-dot"></span></div>
+    <div class="signal-item"><span class="signal-name">로딩중</span><span class="signal-dot"></span></div>
+  </div>
+
+  <!-- 탭 -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('portfolio')">포트폴리오</button>
+    <button class="tab" onclick="switchTab('deposit')">추가 납입</button>
+    <button class="tab" onclick="switchTab('setup')">설정</button>
+  </div>
+
+  <!-- 탭: 포트폴리오 -->
+  <div class="tab-content active" id="tab-portfolio">
+    <div class="section">
+      <div class="section-title">보유 현황</div>
+      <div id="holdings-list">
+        <div class="loading">보유 정보를 입력해주세요 (설정 탭)</div>
+      </div>
+      <div class="total-row">
+        <span class="total-label">총 평가액</span>
+        <span class="total-value" id="total-value">—</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">목표 비중 vs 현재 비중</div>
+      <div id="weight-compare">
+        <div class="loading">데이터 로딩 중</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 탭: 추가 납입 -->
+  <div class="tab-content" id="tab-deposit">
+    <div class="section">
+      <div class="section-title">추가 납입 계산</div>
+      <div class="form-group">
+        <label class="form-label">납입 금액 (원)</label>
+        <input class="form-input" type="number" id="deposit-amount" placeholder="1000000" step="100000">
+      </div>
+      <button class="btn btn-primary" onclick="calcDeposit()">매수 계산</button>
+      <div id="deposit-result"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">매수 완료 후 평단 업데이트</div>
+      <div id="update-inputs"></div>
+      <button class="btn btn-primary" onclick="saveAfterBuy()">저장</button>
+    </div>
+  </div>
+
+  <!-- 탭: 설정 -->
+  <div class="tab-content" id="tab-setup">
+    <div class="section">
+      <div class="section-title">보유 정보 입력</div>
+      <div id="setup-inputs">
+        <!-- JS로 생성 -->
+      </div>
+      <button class="btn btn-primary" onclick="saveHoldings()">저장</button>
+      <button class="btn btn-ghost" onclick="clearHoldings()" style="margin-top:6px">초기화</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ============================================================
+// 상수
+// ============================================================
+const ASSETS = ['QQQ', 'SCHD', 'GLD', 'IEF'];
+const CODES  = { QQQ: '133690', SCHD: '458730', GLD: '411060', IEF: '305080' };
+const WEIGHT_MAP = {
+  ATTACK:  { QQQ: 0.75, SCHD: 0.15, GLD: 0.05, IEF: 0.05, SOFR: 0.0 },
+  DEFENSE: { QQQ: 0.25, SCHD: 0.20, GLD: 0.20, IEF: 0.25, SOFR: 0.10 },
+  CRISIS:  { QQQ: 0.0,  SCHD: 0.20, GLD: 0.30, IEF: 0.25, SOFR: 0.25 },
+};
+const REGIME_COLORS = { ATTACK: '#00e5a0', DEFENSE: '#f5c842', CRISIS: '#ff4466' };
+const BAND = 0.05;
+const STORAGE_KEY = 'uchida_holdings';
+const SIGNALS_URL = 'data/signals.json'; // GitHub Actions가 매일 갱신
+
+// ============================================================
+// 유틸
+// ============================================================
+const fmt = n => n?.toLocaleString('ko-KR') + '원';
+const fmtPct = n => (n >= 0 ? '+' : '') + (n * 100).toFixed(1) + '%';
+
+function loadHoldings() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
+  catch { return {}; }
+}
+
+function saveHoldingsData(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+// ============================================================
+// 신호 데이터 로드 (GitHub Actions가 매일 생성)
+// ============================================================
+let signalData = null;
+
+async function loadSignals() {
+  try {
+    const res = await fetch(SIGNALS_URL + '?t=' + Date.now());
+    signalData = await res.json();
+    renderSignals(signalData);
+  } catch (e) {
+    // signals.json 없으면 데모 데이터
+    signalData = {
+      date: new Date().toISOString().slice(0, 10),
+      regime: 'ATTACK',
+      score: 0.00,
+      signals: {
+        cpi_z:          { value: 0.90, threshold: 2.3,  op: '>', triggered: false, label: 'CPI Z-score' },
+        credit_spread:  { value: 1.66, threshold: 3.5,  op: '>', triggered: false, label: '신용스프레드' },
+        t10y2y:         { value: 0.48, threshold: 0.0,  op: '<', triggered: false, label: '10Y-2Y' },
+        vix:            { value: 17.26,threshold: 22.0, op: '>', triggered: false, label: 'VIX' },
+        dist_ma200:     { value: 0.1817,threshold:-0.03, op: '<', triggered: false, label: 'QQQ MA200' },
+      },
+      prices: { QQQ: 0, SCHD: 0, GLD: 0, IEF: 0 },
+    };
+    renderSignals(signalData);
+    document.getElementById('last-updated').textContent = '신호 파일 없음 (데모 모드)';
+  }
+}
+
+function renderSignals(data) {
+  // 날짜
+  const now = new Date();
+  document.getElementById('date-info').innerHTML =
+    now.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) +
+    '<br>' + now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+  document.getElementById('last-updated').textContent = '기준: ' + data.date;
+
+  // 국면 카드
+  const color = REGIME_COLORS[data.regime] || '#5a5a7a';
+  const card = document.getElementById('regime-card');
+  card.style.setProperty('--regime-color', color);
+  document.getElementById('regime-name').textContent = data.regime;
+  document.getElementById('regime-score').textContent = `점수 ${data.score.toFixed(2)}`;
+
+  // 신호 그리드
+  const grid = document.getElementById('signals-grid');
+  grid.innerHTML = '';
+  Object.values(data.signals).forEach(sig => {
+    const on = sig.triggered;
+    const valStr = sig.label === 'QQQ MA200'
+      ? (sig.value >= 0 ? '+' : '') + (sig.value * 100).toFixed(1) + '%'
+      : sig.value.toFixed(2);
+    grid.innerHTML += `
+      <div class="signal-item ${on ? 'on' : ''}">
+        <div>
+          <div class="signal-name">${sig.label}</div>
+          <div class="signal-val">${valStr}</div>
+        </div>
+        <div class="signal-dot"></div>
+      </div>`;
+  });
+
+  // 포트폴리오 렌더
+  renderPortfolio(data);
+}
+
+// ============================================================
+// 포트폴리오
+// ============================================================
+function renderPortfolio(data) {
+  const holdings = loadHoldings();
+  const prices   = data?.prices || {};
+  const target   = WEIGHT_MAP[data?.regime || 'ATTACK'];
+
+  if (!Object.keys(holdings).length) {
+    document.getElementById('holdings-list').innerHTML =
+      '<div class="loading">설정 탭에서 보유 정보를 입력하세요</div>';
+    document.getElementById('weight-compare').innerHTML = '';
+    return;
+  }
+
+  // 총 평가액
+  let totalValue = 0;
+  let totalCost  = 0;
+  ASSETS.forEach(a => {
+    const h = holdings[a];
+    if (!h) return;
+    totalValue += (prices[a] || h.avg_price) * h.shares;
+    totalCost  += h.avg_price * h.shares;
+  });
+
+  // 보유 현황
+  let html = '';
+  ASSETS.forEach(a => {
+    const h = holdings[a];
+    if (!h || !h.shares) return;
+    const price = prices[a] || h.avg_price;
+    const val   = price * h.shares;
+    const pnl   = val - h.avg_price * h.shares;
+    const pnlPct = pnl / (h.avg_price * h.shares);
+    const curW  = totalValue > 0 ? val / totalValue : 0;
+    const tgtW  = target[a] || 0;
+    const diff  = curW - tgtW;
+    const wClass = Math.abs(diff) > BAND ? (diff > 0 ? 'over' : 'under') : '';
+
+    html += `
+      <div class="asset-row">
+        <span class="asset-ticker">${a}</span>
+        <div class="asset-detail">
+          <span style="font-size:13px">${h.shares}주</span>
+          <span class="asset-shares">@${h.avg_price.toLocaleString()}</span>
+        </div>
+        <div class="asset-value ${pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">
+          ${(val/10000).toFixed(0)}만<br>
+          <span style="font-size:10px">${fmtPct(pnlPct)}</span>
+        </div>
+        <div class="asset-weight ${wClass}">${(curW*100).toFixed(0)}%<br>
+          <span style="font-size:10px">${diff >= 0 ? '+' : ''}${(diff*100).toFixed(1)}p</span>
+        </div>
+      </div>`;
+  });
+
+  document.getElementById('holdings-list').innerHTML = html;
+  document.getElementById('total-value').textContent = fmt(Math.round(totalValue));
+  const totalPnl = totalValue - totalCost;
+  document.getElementById('total-value').className =
+    'total-value ' + (totalPnl >= 0 ? 'pnl-positive' : 'pnl-negative');
+
+  // 비중 비교
+  let wHtml = '';
+  let hasExceeded = false;
+  ASSETS.forEach(a => {
+    const h = holdings[a];
+    const price = prices[a] || (h?.avg_price || 0);
+    const val   = (h?.shares || 0) * price;
+    const curW  = totalValue > 0 ? val / totalValue : 0;
+    const tgtW  = target[a] || 0;
+    const diff  = curW - tgtW;
+    const exceeded = Math.abs(diff) > BAND;
+    if (exceeded) hasExceeded = true;
+    const barW = Math.min(100, curW * 100 / 0.8);
+    const tgtBarW = Math.min(100, tgtW * 100 / 0.8);
+    wHtml += `
+      <div style="margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="font-family:var(--mono);font-size:12px;color:var(--accent)">${a}</span>
+          <span style="font-family:var(--mono);font-size:11px;color:${exceeded?'var(--crisis)':'var(--muted)'}">
+            ${(curW*100).toFixed(1)}% / ${(tgtW*100).toFixed(0)}% (${diff>=0?'+':''}${(diff*100).toFixed(1)}p)
+          </span>
+        </div>
+        <div style="height:4px;background:var(--border);border-radius:2px;position:relative">
+          <div style="height:100%;width:${barW}%;background:var(--accent);border-radius:2px;opacity:0.6"></div>
+          <div style="position:absolute;top:0;height:100%;left:${tgtBarW}%;width:2px;background:var(--text);opacity:0.4"></div>
+        </div>
+      </div>`;
+  });
+  document.getElementById('weight-compare').innerHTML = wHtml;
+
+  // 알림 배너
+  if (hasExceeded) {
+    document.getElementById('alert-band').classList.add('show');
+  }
+}
+
+// ============================================================
+// 추가 납입 계산
+// ============================================================
+function calcDeposit() {
+  const amount = parseInt(document.getElementById('deposit-amount').value);
+  if (!amount || amount <= 0) { alert('금액을 입력하세요'); return; }
+
+  const holdings = loadHoldings();
+  const prices   = signalData?.prices || {};
+  const regime   = signalData?.regime || 'ATTACK';
+  const target   = WEIGHT_MAP[regime];
+
+  let totalValue = amount;
+  ASSETS.forEach(a => {
+    const h = holdings[a];
+    if (h?.shares) totalValue += (prices[a] || h.avg_price) * h.shares;
+  });
+
+  let html = '<div class="action-box"><div class="action-title">매수 지시</div>';
+  let totalBuy = 0;
+
+  // update-inputs 초기화
+  let updateHtml = '';
+
+  ASSETS.forEach(a => {
+    const tgtW  = target[a] || 0;
+    const tgtVal = totalValue * tgtW;
+    const h = holdings[a];
+    const price = prices[a] || h?.avg_price || 1;
+    const curVal = (h?.shares || 0) * price;
+    const buyVal = tgtVal - curVal;
+    const buyShares = Math.max(0, Math.floor(buyVal / price));
+    const buyCost = buyShares * price;
+    totalBuy += buyCost;
+
+    if (buyShares > 0) {
+      html += `
+        <div class="action-row">
+          <span class="action-buy">${a} <span style="color:var(--muted);font-size:11px">(${CODES[a]})</span></span>
+          <span class="action-buy">+${buyShares}주 ${(buyCost/10000).toFixed(0)}만</span>
+        </div>`;
+    } else {
+      html += `
+        <div class="action-row">
+          <span style="color:var(--muted)">${a}</span>
+          <span class="action-hold">유지</span>
+        </div>`;
+    }
+
+    if (buyShares > 0) {
+      updateHtml += `
+        <div style="margin-bottom:12px">
+          <label class="form-label">${a} 실매수가 / 수량</label>
+          <div class="input-row">
+            <input class="form-input" type="number" id="buy-price-${a}" placeholder="${price.toFixed(0)}" value="${price.toFixed(0)}">
+            <input class="form-input" type="number" id="buy-shares-${a}" placeholder="${buyShares}" value="${buyShares}">
+          </div>
+        </div>`;
+    }
+  });
+
+  const remaining = amount - totalBuy;
+  html += `
+    <div class="action-row" style="margin-top:8px;border-top:1px solid rgba(108,99,255,0.3);padding-top:8px">
+      <span style="color:var(--muted);font-size:11px">잔여</span>
+      <span style="font-family:var(--mono);font-size:12px">${fmt(Math.round(remaining))}</span>
+    </div>
+  </div>`;
+
+  document.getElementById('deposit-result').innerHTML = html;
+  document.getElementById('update-inputs').innerHTML = updateHtml ||
+    '<div style="color:var(--muted);font-size:12px;text-align:center;padding:12px">매수 항목 없음</div>';
+}
+
+// ============================================================
+// 매수 후 저장
+// ============================================================
+function saveAfterBuy() {
+  const holdings = loadHoldings();
+  ASSETS.forEach(a => {
+    const priceEl  = document.getElementById(`buy-price-${a}`);
+    const sharesEl = document.getElementById(`buy-shares-${a}`);
+    if (!priceEl || !sharesEl) return;
+
+    const newPrice  = parseFloat(priceEl.value);
+    const newShares = parseInt(sharesEl.value);
+    if (!newPrice || !newShares || newShares <= 0) return;
+
+    const cur = holdings[a] || { avg_price: 0, shares: 0 };
+    const totalShares = cur.shares + newShares;
+    const avgPrice = totalShares > 0
+      ? (cur.avg_price * cur.shares + newPrice * newShares) / totalShares
+      : newPrice;
+
+    holdings[a] = {
+      avg_price: Math.round(avgPrice),
+      shares: totalShares,
+      code: CODES[a],
+    };
+  });
+
+  saveHoldingsData(holdings);
+  renderPortfolio(signalData);
+  switchTab('portfolio');
+  alert('저장 완료');
+}
+
+// ============================================================
+// 설정 탭
+// ============================================================
+function initSetup() {
+  const holdings = loadHoldings();
+  let html = '';
+  ASSETS.forEach(a => {
+    const h = holdings[a] || {};
+    html += `
+      <div style="margin-bottom:16px">
+        <label class="form-label">${a} (${CODES[a]})</label>
+        <div class="input-row">
+          <input class="form-input" type="number" id="setup-price-${a}"
+            placeholder="평단 (원)" value="${h.avg_price || ''}">
+          <input class="form-input" type="number" id="setup-shares-${a}"
+            placeholder="수량 (주)" value="${h.shares || ''}">
+        </div>
+      </div>`;
+  });
+  document.getElementById('setup-inputs').innerHTML = html;
+}
+
+function saveHoldings() {
+  const holdings = {};
+  ASSETS.forEach(a => {
+    const price  = parseFloat(document.getElementById(`setup-price-${a}`)?.value);
+    const shares = parseInt(document.getElementById(`setup-shares-${a}`)?.value);
+    if (price > 0 && shares > 0) {
+      holdings[a] = { avg_price: Math.round(price), shares, code: CODES[a] };
+    }
+  });
+  saveHoldingsData(holdings);
+  renderPortfolio(signalData);
+  alert('저장 완료');
+}
+
+function clearHoldings() {
+  if (confirm('모든 보유 정보를 초기화하시겠습니까?')) {
+    localStorage.removeItem(STORAGE_KEY);
+    initSetup();
+    renderPortfolio(signalData);
+  }
+}
+
+// ============================================================
+// 탭 전환
+// ============================================================
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    const names = ['portfolio', 'deposit', 'setup'];
+    t.classList.toggle('active', names[i] === name);
+  });
+  document.querySelectorAll('.tab-content').forEach(c => {
+    c.classList.toggle('active', c.id === 'tab-' + name);
+  });
+  if (name === 'setup') initSetup();
+}
+
+// ============================================================
+// 초기화
+// ============================================================
+loadSignals();
+</script>
+</body>
+</html>
