@@ -849,7 +849,7 @@ function initSetup() {
     const h = holdings[a] || {};
     html += `
       <div style="margin-bottom:16px">
-        <label class="form-label">${a} (${CODES[a]})</label>
+        <label class="form-label">${NAMES[a]}</label>
         <div class="input-row">
           <input class="form-input" type="number" id="setup-price-${a}"
             placeholder="평단 (원)" value="${h.avg_price || ''}">
