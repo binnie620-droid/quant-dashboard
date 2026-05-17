@@ -1,0 +1,29 @@
+{
+  "date": "2026-05-18",
+  "updated": "2026-05-18 02:16",
+  "uchida_phase": "ATTACK",
+  "multiplier": 1.0,
+  "weights": {
+    "battery": 0.5,
+    "semiconductor": 0.5
+  },
+  "cash": 0.0,
+  "war_event": false,
+  "sector_events": [],
+  "news": [
+    {
+      "sector": "automotive",
+      "title": "HD현대사이트솔루션, 알제리 정부와 370억 규모 지게차 공급계약",
+      "magnitude": 3
+    }
+  ],
+  "prices": {
+    "semiconductor": 46300.0,
+    "battery": 24350.0,
+    "energy_chem": 16775.0,
+    "biotech": 11225.0,
+    "banking": 15600.0,
+    "automotive": 38830.0,
+    "defense": 43935.0
+  }
+}
