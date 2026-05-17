@@ -13,7 +13,8 @@
     --text: #e8e8f0;
     --muted: #5a5a7a;
     --attack: #00e5a0;
-    --defense: #f5c842;
+    --caution: #f5c842;
+    --defense: #ff9500;
     --crisis: #ff4466;
     --accent: #6c63ff;
     --mono: 'DM Mono', monospace;
@@ -460,6 +461,9 @@
     <div class="regime-score" id="regime-score">점수 —</div>
   </div>
 
+  <!-- CAUTION 게이지 (RSI 과열 필터 발동 시만 표시) -->
+  <div id="caution-box" style="display:none;background:rgba(245,200,66,0.08);border:1px solid rgba(245,200,66,0.3);border-radius:8px;padding:12px 14px;margin-bottom:16px"></div>
+
   <!-- 신호 그리드 -->
   <div class="signals-grid" id="signals-grid">
     <div class="signal-item"><span class="signal-name">로딩중</span><span class="signal-dot"></span></div>
@@ -547,7 +551,12 @@ const WEIGHT_MAP = {
   DEFENSE: { QQQ: 0.25, SCHD: 0.20, GLD: 0.20, IEF: 0.25, SOFR: 0.10 },
   CRISIS:  { QQQ: 0.0,  SCHD: 0.20, GLD: 0.30, IEF: 0.25, SOFR: 0.25 },
 };
-const REGIME_COLORS = { ATTACK: '#00e5a0', DEFENSE: '#f5c842', CRISIS: '#ff4466' };
+const REGIME_COLORS = {
+  ATTACK:  '#00e5a0',
+  CAUTION: '#f5c842',
+  DEFENSE: '#ff9500',
+  CRISIS:  '#ff4466',
+};
 const BAND = 0.05;
 const STORAGE_KEY = 'uchida_holdings';
 const SIGNALS_URL = 'data/signals.json'; // GitHub Actions가 매일 갱신
@@ -610,7 +619,33 @@ function renderSignals(data) {
   const card = document.getElementById('regime-card');
   card.style.setProperty('--regime-color', color);
   document.getElementById('regime-name').textContent = data.regime;
-  document.getElementById('regime-score').textContent = `점수 ${data.score.toFixed(2)}`;
+
+  // 점수 게이지 (ATTACK 임계 1.5 기준)
+  const scoreVal  = data.score || 0;
+  const scorePct  = Math.min(100, (scoreVal / 3.0) * 100);
+  const scoreText = data.regime === 'CAUTION'
+    ? `점수 ${scoreVal.toFixed(2)} | 🟡 RSI 과열 필터 발동`
+    : `점수 ${scoreVal.toFixed(2)}`;
+  document.getElementById('regime-score').textContent = scoreText;
+
+  // CAUTION RSI 게이지
+  const cautionBox = document.getElementById('caution-box');
+  if (data.caution && data.caution.active) {
+    const rsi     = data.caution.rsi || 0;
+    const maDist  = data.caution.ma_dist || 0;
+    cautionBox.style.display = 'block';
+    cautionBox.innerHTML = `
+      <div style="font-size:10px;font-weight:700;letter-spacing:0.2em;color:var(--caution);margin-bottom:8px">⚠ RSI 과열 필터 발동 — QQQ 75% → 50%</div>
+      <div style="display:flex;gap:12px;font-family:var(--mono);font-size:11px">
+        <div>RSI(14): <span style="color:var(--caution);font-weight:600">${rsi.toFixed(1)}</span> / 75.0</div>
+        <div>MA200: <span style="color:var(--caution);font-weight:600">+${maDist.toFixed(1)}%</span> / +15%</div>
+      </div>
+      <div style="margin-top:8px;height:4px;background:var(--border);border-radius:2px">
+        <div style="height:100%;width:${Math.min(100,(rsi/100)*100)}%;background:var(--caution);border-radius:2px"></div>
+      </div>`;
+  } else {
+    cautionBox.style.display = 'none';
+  }
 
   // 신호 그리드
   const grid = document.getElementById('signals-grid');
