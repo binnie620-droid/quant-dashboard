@@ -445,7 +445,6 @@
     <div class="tabs">
       <button class="tab active" id="s-tab-btn-portfolio" onclick="switchSekinoTab('portfolio')">포트폴리오</button>
       <button class="tab" id="s-tab-btn-deposit" onclick="switchSekinoTab('deposit')">리밸런싱</button>
-      <button class="tab" id="s-tab-btn-setup" onclick="switchSekinoTab('setup')">설정</button>
     </div>
 
     <!-- 포트폴리오 탭 -->
@@ -497,6 +496,11 @@
         <button class="btn btn-sekino" onclick="calcSekinoRebalance()">리밸런싱 계산</button>
         <div id="s-deposit-result"></div>
       </div>
+      <div class="section">
+        <div class="section-title">포트폴리오 초기화</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">보유 정보 및 매매 로그를 모두 삭제합니다</div>
+        <button class="btn btn-ghost" onclick="clearSekinoAll()" style="color:var(--crisis);border-color:var(--crisis)">전체 초기화</button>
+      </div>
       <div class="section" id="s-rebal-update-section" style="display:none">
         <div class="section-title">실매매가 입력 후 저장</div>
         <div id="s-update-inputs"></div>
@@ -504,15 +508,7 @@
       </div>
     </div>
 
-    <!-- 설정 탭 -->
-    <div class="tab-content" id="s-tab-setup">
-      <div class="section">
-        <div class="section-title">보유 정보 입력</div>
-        <div id="s-setup-inputs"></div>
-        <button class="btn btn-sekino" onclick="saveSekinoHoldings()">저장</button>
-        <button class="btn btn-ghost" onclick="clearSekinoHoldings()" style="margin-top:6px">초기화</button>
-      </div>
-    </div>
+
 
   </div><!-- /page-sekino -->
 
@@ -1309,47 +1305,9 @@ function loadSekinoHoldings() {
   try { return JSON.parse(localStorage.getItem(SEKINO_STORAGE)) || {}; } catch { return {}; }
 }
 
-function initSekinoSetup() {
-  const holdings = loadSekinoHoldings();
-  let html = '';
-  SEKINO_SECTORS.forEach(s => {
-    const h = holdings[s] || {};
-    html += `
-      <div style="margin-bottom:16px">
-        <label class="form-label">${SEKINO_ETF_NAME[s]} (${SEKINO_ETF[s]})</label>
-        <div class="input-row">
-          <input class="form-input" type="number" id="s-price-${s}" placeholder="평단 (원)" value="${h.avg_price||''}">
-          <input class="form-input" type="number" id="s-shares-${s}" placeholder="수량 (주)" value="${h.shares||''}">
-        </div>
-      </div>`;
-  });
-  document.getElementById('s-setup-inputs').innerHTML = html;
-}
-
-function saveSekinoHoldings() {
-  const holdings = {};
-  SEKINO_SECTORS.forEach(s => {
-    const price  = parseFloat(document.getElementById(`s-price-${s}`)?.value);
-    const shares = parseInt(document.getElementById(`s-shares-${s}`)?.value);
-    if (price > 0 && shares > 0) holdings[s] = { avg_price: Math.round(price), shares, etf: SEKINO_ETF[s] };
-  });
-  localStorage.setItem(SEKINO_STORAGE, JSON.stringify(holdings));
-  if (sekinoData) renderSekinoPortfolio(sekinoData);
-  alert('저장 완료');
-}
-
-function clearSekinoHoldings() {
-  if (confirm('세키노 보유 정보를 초기화하시겠습니까?')) {
-    localStorage.removeItem(SEKINO_STORAGE);
-    localStorage.removeItem(SEKINO_TRADE_LOG_KEY);
-    initSekinoSetup();
-    if (sekinoData) renderSekinoPortfolio(sekinoData);
-  }
-}
-
 // ── 탭 전환 ────────────────────────────────────────────────
 function switchSekinoTab(name) {
-  const names = ['portfolio', 'deposit', 'setup'];
+  const names = ['portfolio', 'deposit'];
   document.querySelectorAll('#page-sekino .tab').forEach((t, i) => {
     t.classList.remove('active');
     if (names[i] === name) t.classList.add('active');
@@ -1357,7 +1315,25 @@ function switchSekinoTab(name) {
   document.querySelectorAll('#page-sekino .tab-content').forEach(el => {
     el.classList.toggle('active', el.id === 's-tab-' + name);
   });
-  if (name === 'setup') initSekinoSetup();
+  if (name === 'deposit') {
+    const total = loadSekinoHoldings();
+    let cur = 0;
+    SEKINO_SECTORS.forEach(s => {
+      const h = total[s];
+      if (h?.shares) cur += ((sekinoData?.prices||{})[s]||h.avg_price) * h.shares;
+    });
+    document.getElementById('s-rebal-total').textContent =
+      cur > 0 ? (cur/10000).toFixed(0) + '만원' : '보유 없음 (초기 매수)';
+  }
+}
+
+function clearSekinoAll() {
+  if (confirm('보유 정보와 매매 로그를 모두 초기화하시겠습니까?')) {
+    localStorage.removeItem(SEKINO_STORAGE);
+    localStorage.removeItem(SEKINO_TRADE_LOG_KEY);
+    if (sekinoData) renderSekinoStatus(sekinoData);
+    alert('초기화 완료');
+  }
 }
 
 // ============================================================
