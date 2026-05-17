@@ -23,6 +23,7 @@ from data.loader import load_all
 from data.features import build_features
 from models.baseline import (
     compute_flags, compute_score, classify_regime,
+    classify_regime_rsi_filter,
     BaselineConfig,
 )
 
@@ -32,7 +33,12 @@ USERS_FILE = Path(__file__).parent.parent / "data" / "users.json"
 STATE_FILE = Path(__file__).parent.parent / "data" / "bot_state.json"
 OUT_FILE   = Path(__file__).parent.parent / "data" / "signals.json"
 
-REGIME_COLORS = {"ATTACK": "🟢", "DEFENSE": "🟡", "CRISIS": "🔴"}
+REGIME_COLORS = {
+    "ATTACK":  "🟢",
+    "CAUTION": "🟡",
+    "DEFENSE": "🟠",
+    "CRISIS":  "🔴",
+}
 
 
 def load_users():
@@ -111,11 +117,27 @@ def main():
     cfg = BaselineConfig()
     flags  = compute_flags(features, cfg)
     score  = compute_score(flags, cfg)
-    regime = classify_regime(score, cfg)
 
-    latest  = features.index[-1]
-    cur_regime = str(regime.iloc[-1])
+    # 1단계: 기본 국면 (3-class)
+    regime_base = classify_regime(score, cfg)
+    cur_regime_base = str(regime_base.iloc[-1])
+
+    # 2단계: RSI 과열 필터 적용 (4-class)
+    regime_final = classify_regime_rsi_filter(
+        score, features,
+        rsi_threshold=75.0,
+        ma_dist_threshold=0.15,
+        cfg=cfg,
+    )
+    cur_regime = str(regime_final.iloc[-1])
     cur_score  = float(score.iloc[-1])
+
+    # RSI + MA200 현재값
+    cur_rsi     = float(features.loc[latest, "rsi_QQQ"]) if "rsi_QQQ" in features.columns else None
+    cur_ma_dist = float(features.loc[latest, "dist_ma200_QQQ"]) if "dist_ma200_QQQ" in features.columns else None
+    rsi_triggered  = cur_rsi is not None and cur_rsi > 75.0
+    ma_triggered   = cur_ma_dist is not None and cur_ma_dist > 0.15
+    caution_active = (cur_regime_base == "ATTACK") and rsi_triggered and ma_triggered
 
     sig_data = {
         "cpi_z":        {"value": float(features.loc[latest, "cpi_z"]),
@@ -148,8 +170,16 @@ def main():
     output = {
         "date":    latest.strftime("%Y-%m-%d"),
         "updated": datetime.now(KST).strftime("%Y-%m-%d %H:%M"),
-        "regime":  cur_regime,
+        "regime":  cur_regime,           # 최종 (CAUTION 포함)
+        "regime_base": cur_regime_base,  # 기본 3-class
         "score":   cur_score,
+        "caution": {
+            "active":       caution_active,
+            "rsi":          round(cur_rsi, 2) if cur_rsi else None,
+            "rsi_threshold": 75.0,
+            "ma_dist":      round(cur_ma_dist * 100, 2) if cur_ma_dist else None,
+            "ma_threshold": 15.0,
+        },
         "signals": sig_data,
         "prices":  prices,
     }
@@ -170,30 +200,41 @@ def main():
             f"🚨 *UCHIDA V3 — 국면 전환*\n\n"
             f"{old_icon} {prev_regime} → {new_icon} *{cur_regime}*\n"
             f"점수: {cur_score:.2f}\n\n"
-            f"*[신호 현황]*\n"
+            f"*[매크로 신호]*\n"
         )
         for s in sig_data.values():
             icon = "🔴" if s["triggered"] else "⚪"
             val_str = f"{s['value']:+.2%}" if s["label"] == "QQQ MA200" else f"{s['value']:.2f}"
             msg += f"  {icon} {s['label']}: {val_str}\n"
+
+        # CAUTION 구간 정보
+        if cur_regime == "CAUTION":
+            msg += (
+                f"\n*[RSI 과열 필터 발동]*\n"
+                f"  🟡 RSI(14): {cur_rsi:.1f} (임계 75)\n"
+                f"  🟡 MA200 거리: {cur_ma_dist*100:+.1f}% (임계 +15%)\n"
+                f"  QQQ 비중: 75% → *50%* 자동 조정\n"
+            )
         msg += f"\n대시보드: https://binnie620-droid.github.io/UCHIDA"
 
-        # 모든 사용자에게 알림
         if users:
             for uid, udata in users.items():
                 chat_id = udata.get("telegram_chat_id", "")
                 send_telegram(chat_id, msg)
                 print(f"[TG] {uid} 알림 전송")
         else:
-            # users.json 없으면 환경변수 CHAT_ID로
             chat_id = os.environ.get("TG_CHAT_ID", "")
             send_telegram(chat_id, msg)
     else:
         print(f"국면 유지: {cur_regime}")
-        # 변화 없어도 매일 간단 리포트 (선택)
+        # 매일 간단 리포트
+        caution_note = ""
+        if cur_regime == "CAUTION":
+            caution_note = f"\n🟡 RSI 과열 필터 발동 중 (RSI {cur_rsi:.1f}, MA200 {cur_ma_dist*100:+.1f}%)"
         daily_msg = (
             f"*UCHIDA V3 — {latest.strftime('%Y-%m-%d')}*\n\n"
-            f"{REGIME_COLORS.get(cur_regime,'')} 국면: *{cur_regime}* (점수 {cur_score:.2f})\n"
+            f"{REGIME_COLORS.get(cur_regime,'')} 국면: *{cur_regime}* (점수 {cur_score:.2f})"
+            f"{caution_note}\n"
             f"매매 불필요 ✅"
         )
         if users:
@@ -205,7 +246,12 @@ def main():
             send_telegram(chat_id, daily_msg)
 
     # 상태 저장
-    save_state({"last_regime": cur_regime, "last_run": str(date.today())})
+    save_state({
+        "last_regime": cur_regime,
+        "last_run": str(date.today()),
+        "last_rsi": round(cur_rsi, 2) if cur_rsi else None,
+        "last_ma_dist": round(cur_ma_dist * 100, 2) if cur_ma_dist else None,
+    })
     print("완료")
 
 
