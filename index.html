@@ -444,7 +444,7 @@
     <!-- 탭 (UCHIDA와 동일 구조) -->
     <div class="tabs">
       <button class="tab active" id="s-tab-btn-portfolio" onclick="switchSekinoTab('portfolio')">포트폴리오</button>
-      <button class="tab" id="s-tab-btn-deposit" onclick="switchSekinoTab('deposit')">추가 납입</button>
+      <button class="tab" id="s-tab-btn-deposit" onclick="switchSekinoTab('deposit')">리밸런싱</button>
       <button class="tab" id="s-tab-btn-setup" onclick="switchSekinoTab('setup')">설정</button>
     </div>
 
@@ -476,21 +476,31 @@
       </div>
     </div>
 
-    <!-- 추가 납입 탭 (UCHIDA 동일 구조) -->
+    <!-- 리밸런싱 탭 -->
     <div class="tab-content" id="s-tab-deposit">
       <div class="section">
-        <div class="section-title">추가 납입 계산</div>
-        <div class="form-group">
-          <label class="form-label">납입 금액 (원)</label>
-          <input class="form-input" type="number" id="s-deposit-amount" placeholder="1000000" step="100000">
+        <div class="section-title">리밸런싱 계산</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+          <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:10px;color:var(--muted);margin-bottom:4px">총 운용 금액</div>
+            <div style="font-family:var(--mono);font-size:14px;font-weight:500" id="s-rebal-total">—</div>
+          </div>
+          <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:10px;color:var(--muted);margin-bottom:4px">0원 = 리밸런싱만</div>
+            <div style="font-size:11px;color:var(--muted)">금액 입력 시 추가 매수</div>
+          </div>
         </div>
-        <button class="btn btn-sekino" onclick="calcSekinoDeposit()">매수 계산</button>
+        <div class="form-group">
+          <label class="form-label">추가 납입 금액 (원, 없으면 0)</label>
+          <input class="form-input" type="number" id="s-deposit-amount" placeholder="0" step="100000" value="0">
+        </div>
+        <button class="btn btn-sekino" onclick="calcSekinoRebalance()">리밸런싱 계산</button>
         <div id="s-deposit-result"></div>
       </div>
-      <div class="section">
-        <div class="section-title">매수 완료 후 평단 업데이트</div>
+      <div class="section" id="s-rebal-update-section" style="display:none">
+        <div class="section-title">실매매가 입력 후 저장</div>
         <div id="s-update-inputs"></div>
-        <button class="btn btn-sekino" onclick="saveSekinoAfterBuy()">저장</button>
+        <button class="btn btn-sekino" onclick="saveSekinoAfterRebalance()">저장 → 로그 기록</button>
       </div>
     </div>
 
@@ -1111,94 +1121,177 @@ function renderSekinoTradeLog() {
   el.innerHTML = html;
 }
 
-// ── 추가 납입 계산 (UCHIDA 방식) ───────────────────────────
-function calcSekinoDeposit() {
-  const amount = parseInt(document.getElementById('s-deposit-amount').value);
-  if (!amount || amount <= 0) { alert('금액을 입력하세요'); return; }
-
+// ── 리밸런싱 계산 (매수 + 매도) ──────────────────────────
+function calcSekinoRebalance() {
+  const addAmount  = parseInt(document.getElementById('s-deposit-amount').value) || 0;
   const holdings   = loadSekinoHoldings();
   const weights    = sekinoData?.weights || {};
-  const multiplier = sekinoData?.multiplier ?? 1.0;
-  const investAmt  = amount * multiplier; // 승수 적용
+  const prices     = sekinoData?.prices || {};
+  const BAND       = 0.05;
 
-  // 현재 총 평가액
+  // 총 평가액
   let curTotal = 0;
   SEKINO_SECTORS.forEach(s => {
     const h = holdings[s];
-    if (h?.shares) curTotal += h.avg_price * h.shares;
+    if (h?.shares) {
+      const p = prices[s] || h.avg_price;
+      curTotal += p * h.shares;
+    }
   });
-  const newTotal = curTotal + investAmt;
+  const newTotal = curTotal + addAmount;
 
-  let html = '<div class="action-box"><div class="action-title">매수 지시</div>';
-  let totalBuy = 0;
+  document.getElementById('s-rebal-total').textContent =
+    (curTotal / 10000).toFixed(0) + '만원';
+
+  const buys = [], sells = [], holds = [];
+  let totalBuy = 0, totalSell = 0;
   let updateHtml = '';
 
   SEKINO_SECTORS.forEach(s => {
-    const tgtW    = weights[s] || 0;
-    const tgtVal  = newTotal * tgtW;
-    const h       = holdings[s];
-    const price   = (sekinoData?.prices || {})[s] || h?.avg_price || 0;
-    const curVal  = (h?.shares || 0) * (h?.avg_price || price);
-    const buyVal  = tgtVal - curVal;
-    const buyShares = price > 0 ? Math.max(0, Math.floor(buyVal / price)) : 0;
-    const buyCost   = buyShares * price;
-    totalBuy += buyCost;
+    const tgtW   = weights[s] || 0;
+    const h      = holdings[s];
+    const price  = prices[s] || h?.avg_price || 0;
+    const curShares = h?.shares || 0;
+    const curVal = price * curShares;
+    const tgtVal = newTotal * tgtW;
+    const diff   = tgtVal - curVal;
+    const diffW  = newTotal > 0 ? (tgtVal - curVal) / newTotal : 0;
 
-    if (buyShares > 0) {
-      html += `<div class="action-row"><span class="action-buy">${SEKINO_ETF_NAME[s]} (${SEKINO_ETF[s]})</span><span class="action-buy">+${buyShares}주 ${(buyCost/10000).toFixed(0)}만</span></div>`;
-      updateHtml += `
-        <div style="margin-bottom:12px">
-          <label class="form-label">${SEKINO_KO[s]} 실매수가 / 수량</label>
-          <div class="input-row">
-            <input class="form-input" type="number" id="s-buy-price-${s}" placeholder="${price||0}" value="${price||0}">
-            <input class="form-input" type="number" id="s-buy-shares-${s}" placeholder="${buyShares}" value="${buyShares}">
-          </div>
-        </div>`;
-    } else if (tgtW > 0) {
-      html += `<div class="action-row"><span style="color:var(--muted)">${SEKINO_KO[s]}</span><span class="action-hold">유지</span></div>`;
+    if (price <= 0) return;
+
+    if (tgtW === 0 && curShares === 0) return;
+
+    if (Math.abs(diffW) < BAND && addAmount === 0) {
+      if (tgtW > 0) holds.push(s);
+      return;
+    }
+
+    if (diff > 0) {
+      const n = Math.floor(diff / price);
+      if (n > 0) {
+        totalBuy += n * price;
+        buys.push({ s, n, price, cost: n * price });
+        updateHtml += `
+          <div style="margin-bottom:12px">
+            <div style="font-size:11px;color:var(--attack);font-weight:600;margin-bottom:6px">
+              매수 · ${SEKINO_KO[s]} (${SEKINO_ETF[s]})</div>
+            <div class="input-row">
+              <input class="form-input" type="number" id="s-buy-price-${s}"
+                placeholder="${Math.round(price)}" value="${Math.round(price)}">
+              <input class="form-input" type="number" id="s-buy-shares-${s}"
+                placeholder="${n}" value="${n}">
+            </div>
+          </div>`;
+      } else { holds.push(s); }
+    } else if (diff < 0) {
+      const n = Math.floor(Math.abs(diff) / price);
+      if (n > 0 && n <= curShares) {
+        totalSell += n * price;
+        sells.push({ s, n, price, cost: n * price });
+        updateHtml += `
+          <div style="margin-bottom:12px">
+            <div style="font-size:11px;color:var(--crisis);font-weight:600;margin-bottom:6px">
+              매도 · ${SEKINO_KO[s]} (${SEKINO_ETF[s]})</div>
+            <div class="input-row">
+              <input class="form-input" type="number" id="s-sell-price-${s}"
+                placeholder="${Math.round(price)}" value="${Math.round(price)}">
+              <input class="form-input" type="number" id="s-sell-shares-${s}"
+                placeholder="${n}" value="${n}">
+            </div>
+          </div>`;
+      } else { holds.push(s); }
     }
   });
 
-  const cashAmt = amount - totalBuy;
-  const cashPct = sekinoData?.cash || 0;
-  if (cashPct > 0 || cashAmt > 0) {
-    html += `<div class="action-row"><span style="color:var(--muted)">현금 보유 (${(cashPct*100).toFixed(0)}%)</span><span style="font-family:var(--mono);font-size:12px">${(cashAmt/10000).toFixed(0)}만</span></div>`;
+  // 결과 렌더
+  const boxColor = 'rgba(224,64,251,0.08)';
+  const borderColor = 'rgba(224,64,251,0.3)';
+  let html = `<div style="background:${boxColor};border:1px solid ${borderColor};border-radius:8px;padding:14px;margin-top:12px">
+    <div style="font-size:10px;font-weight:700;letter-spacing:0.2em;color:var(--sekino);text-transform:uppercase;margin-bottom:10px">매매 지시</div>`;
+
+  if (buys.length === 0 && sells.length === 0) {
+    html += `<div style="color:var(--muted);font-size:13px;text-align:center;padding:12px">
+      변동 없음 (5% 밴드 이내)</div>`;
   }
 
-  html += `<div class="action-row" style="margin-top:8px;border-top:1px solid rgba(224,64,251,0.3);padding-top:8px">
-    <span style="color:var(--muted);font-size:11px">잔여</span>
-    <span style="font-family:var(--mono);font-size:12px">${(Math.max(0,amount-totalBuy)/10000).toFixed(1)}만원</span>
-  </div></div>`;
+  buys.forEach(({s, n, cost}) => {
+    html += `<div class="action-row">
+      <span class="action-buy">매수 · ${SEKINO_ETF_NAME[s]}</span>
+      <span class="action-buy">+${n}주 ${(cost/10000).toFixed(0)}만</span>
+    </div>`;
+  });
+
+  sells.forEach(({s, n, cost}) => {
+    html += `<div class="action-row">
+      <span style="color:var(--crisis)">매도 · ${SEKINO_ETF_NAME[s]}</span>
+      <span style="color:var(--crisis)">-${n}주 ${(cost/10000).toFixed(0)}만</span>
+    </div>`;
+  });
+
+  holds.forEach(s => {
+    html += `<div class="action-row">
+      <span style="color:var(--muted)">${SEKINO_KO[s]}</span>
+      <span style="color:var(--muted)">유지</span>
+    </div>`;
+  });
+
+  const remain = addAmount + totalSell - totalBuy;
+  if (buys.length > 0 || sells.length > 0) {
+    html += `<div class="action-row" style="margin-top:8px;border-top:1px solid ${borderColor};padding-top:8px">
+      <span style="color:var(--muted);font-size:11px">잔여</span>
+      <span style="font-family:var(--mono);font-size:12px">${(Math.max(0,remain)/10000).toFixed(1)}만원</span>
+    </div>`;
+  }
+  html += '</div>';
 
   document.getElementById('s-deposit-result').innerHTML = html;
-  document.getElementById('s-update-inputs').innerHTML = updateHtml ||
-    '<div style="color:var(--muted);font-size:12px;text-align:center;padding:12px">매수 항목 없음</div>';
+
+  const updateSection = document.getElementById('s-rebal-update-section');
+  if (buys.length > 0 || sells.length > 0) {
+    document.getElementById('s-update-inputs').innerHTML = updateHtml;
+    updateSection.style.display = 'block';
+  } else {
+    updateSection.style.display = 'none';
+  }
 }
 
-// ── 매수 후 저장 + 로그 기록 ──────────────────────────────
-function saveSekinoAfterBuy() {
+// ── 리밸런싱 저장 + 로그 기록 ─────────────────────────────
+function saveSekinoAfterRebalance() {
   const holdings = loadSekinoHoldings();
   const log      = loadTradeLog();
   const today    = new Date().toISOString().slice(0, 10);
 
+  // 매수 처리
   SEKINO_SECTORS.forEach(s => {
     const priceEl  = document.getElementById(`s-buy-price-${s}`);
     const sharesEl = document.getElementById(`s-buy-shares-${s}`);
     if (!priceEl || !sharesEl) return;
-    const newPrice  = parseFloat(priceEl.value);
-    const newShares = parseInt(sharesEl.value);
-    if (!newPrice || !newShares || newShares <= 0) return;
-
-    // 평단 계산
+    const p = parseFloat(priceEl.value);
+    const n = parseInt(sharesEl.value);
+    if (!p || !n || n <= 0) return;
     const cur = holdings[s] || { avg_price: 0, shares: 0 };
-    const totalShares = cur.shares + newShares;
-    const avgPrice = totalShares > 0
-      ? (cur.avg_price * cur.shares + newPrice * newShares) / totalShares
-      : newPrice;
-    holdings[s] = { avg_price: Math.round(avgPrice), shares: totalShares, etf: SEKINO_ETF[s] };
+    const tot = cur.shares + n;
+    const avg = tot > 0 ? (cur.avg_price * cur.shares + p * n) / tot : p;
+    holdings[s] = { avg_price: Math.round(avg), shares: tot, etf: SEKINO_ETF[s] };
+    log.push({ date: today, type: 'buy', sector: s, price: Math.round(p), shares: n });
+  });
 
-    // 매매 로그
-    log.push({ date: today, type: 'buy', sector: s, price: Math.round(newPrice), shares: newShares });
+  // 매도 처리
+  SEKINO_SECTORS.forEach(s => {
+    const priceEl  = document.getElementById(`s-sell-price-${s}`);
+    const sharesEl = document.getElementById(`s-sell-shares-${s}`);
+    if (!priceEl || !sharesEl) return;
+    const p = parseFloat(priceEl.value);
+    const n = parseInt(sharesEl.value);
+    if (!p || !n || n <= 0) return;
+    const cur = holdings[s] || { avg_price: 0, shares: 0 };
+    const remaining = Math.max(0, cur.shares - n);
+    if (remaining === 0) {
+      delete holdings[s];
+    } else {
+      holdings[s] = { avg_price: cur.avg_price, shares: remaining, etf: SEKINO_ETF[s] };
+    }
+    log.push({ date: today, type: 'sell', sector: s, price: Math.round(p), shares: n });
   });
 
   localStorage.setItem(SEKINO_STORAGE, JSON.stringify(holdings));
@@ -1207,6 +1300,9 @@ function saveSekinoAfterBuy() {
   switchSekinoTab('portfolio');
   alert('저장 완료');
 }
+
+// ── 하위 호환 (구버전 saveSekinoAfterBuy 혹시 남아있을 경우)
+function saveSekinoAfterBuy() { saveSekinoAfterRebalance(); }
 
 // ── 설정 ───────────────────────────────────────────────────
 function loadSekinoHoldings() {
