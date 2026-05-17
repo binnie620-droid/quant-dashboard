@@ -459,6 +459,25 @@
     <div class="regime-label">현재 국면</div>
     <div class="regime-name" id="regime-name">—</div>
     <div class="regime-score" id="regime-score">점수 —</div>
+
+    <!-- 점수 게이지 -->
+    <div style="margin-top:14px">
+      <div style="position:relative;height:20px;margin-bottom:4px">
+        <!-- 게이지 바 -->
+        <div style="position:absolute;top:8px;left:0;right:0;height:4px;border-radius:2px;background:linear-gradient(to right, var(--attack) 0%, var(--attack) 33%, var(--caution) 33%, var(--defense) 50%, var(--crisis) 100%);opacity:0.3"></div>
+        <!-- 역삼각형 마커 -->
+        <div id="score-marker" style="position:absolute;top:0;font-size:12px;transform:translateX(-50%);transition:left 0.4s ease">▼</div>
+      </div>
+      <!-- 구간 레이블 -->
+      <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:0.05em">
+        <span>ATTACK</span>
+        <span>DEFENSE</span>
+        <span>CRISIS</span>
+      </div>
+    </div>
+
+    <!-- RSI 상태 한 줄 -->
+    <div id="rsi-status" style="margin-top:10px;font-family:var(--mono);font-size:11px;color:var(--muted);border-top:1px solid var(--border);padding-top:8px"></div>
   </div>
 
   <!-- CAUTION 게이지 (RSI 과열 필터 발동 시만 표시) -->
@@ -620,13 +639,48 @@ function renderSignals(data) {
   card.style.setProperty('--regime-color', color);
   document.getElementById('regime-name').textContent = data.regime;
 
-  // 점수 게이지 (ATTACK 임계 1.5 기준)
-  const scoreVal  = data.score || 0;
-  const scorePct  = Math.min(100, (scoreVal / 3.0) * 100);
+  // 점수 게이지 마커 위치 계산
+  // 점수 0~4 범위를 0~100% 위치로 변환 (최대 3.5 기준)
+  const scoreVal = data.score || 0;
+  const markerPct = Math.min(96, Math.max(2, (scoreVal / 3.5) * 100));
+  const marker = document.getElementById('score-marker');
+  marker.style.left = markerPct + '%';
+  marker.style.color = color;
+
+  // 점수 텍스트
   const scoreText = data.regime === 'CAUTION'
     ? `점수 ${scoreVal.toFixed(2)} | 🟡 RSI 과열 필터 발동`
     : `점수 ${scoreVal.toFixed(2)}`;
   document.getElementById('regime-score').textContent = scoreText;
+
+  // RSI 상태 한 줄
+  const rsiStatus = document.getElementById('rsi-status');
+  if (data.caution) {
+    const rsi    = data.caution.rsi || 0;
+    const maDist = data.caution.ma_dist || 0;
+    const rsiThr = data.caution.rsi_threshold || 75;
+    const maThr  = data.caution.ma_threshold || 15;
+
+    if (data.caution.active) {
+      // CAUTION 발동 중
+      rsiStatus.innerHTML = `RSI <span style="color:var(--caution)">${rsi.toFixed(1)}</span> · MA200 <span style="color:var(--caution)">+${maDist.toFixed(1)}%</span> · QQQ 75%→<span style="color:var(--caution)">50%</span>`;
+    } else {
+      // CAUTION 미발동 — 어느 조건이 부족한지
+      const rsiOk = rsi > rsiThr;
+      const maOk  = maDist > maThr;
+      let hint = '';
+      if (!rsiOk && !maOk) {
+        hint = `RSI ${rsi.toFixed(1)} (↑${(rsiThr - rsi).toFixed(1)} → CAUTION) · MA200 +${maDist.toFixed(1)}%`;
+      } else if (!rsiOk) {
+        hint = `RSI <span style="color:var(--caution)">${rsi.toFixed(1)}</span> (↑${(rsiThr - rsi).toFixed(1)} 더 오르면 CAUTION) · MA200 +${maDist.toFixed(1)}% ✓`;
+      } else if (!maOk) {
+        hint = `RSI <span style="color:var(--caution)">${rsi.toFixed(1)}</span> ✓ · MA200 +${maDist.toFixed(1)}% (↑${(maThr - maDist).toFixed(1)}% 더 오르면 CAUTION)`;
+      }
+      rsiStatus.innerHTML = hint;
+    }
+  } else {
+    rsiStatus.textContent = '';
+  }
 
   // CAUTION RSI 게이지
   const cautionBox = document.getElementById('caution-box');
