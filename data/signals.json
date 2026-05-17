@@ -1,6 +1,6 @@
 {
   "date": "2026-05-15",
-  "updated": "2026-05-18 02:28",
+  "updated": "2026-05-18 02:41",
   "regime": "ATTACK",
   "regime_base": "ATTACK",
   "score": 0.0,
@@ -41,7 +41,7 @@
       "label": "VIX"
     },
     "dist_ma200": {
-      "value": 0.16249487635066373,
+      "value": 0.1624948751871842,
       "threshold": -0.03,
       "op": "<",
       "triggered": false,
