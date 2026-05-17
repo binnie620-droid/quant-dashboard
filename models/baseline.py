@@ -171,9 +171,30 @@ WEIGHT_MAP: Dict[str, Dict[str, float]] = {
     },
 }
 
+# 4-class WEIGHT_MAP (CAUTION 추가, 실험용)
+# CAUTION: 점수 0.8~1.5 구간 (과매수 경계)
+# AI 판단: ATTACK(75%) ~ DEFENSE(25%) 중간값 50%로 시작
+# 다른 자산은 ATTACK/DEFENSE 평균
+WEIGHT_MAP_CAUTION: Dict[str, Dict[str, float]] = {
+    "ATTACK": {
+        "QQQ": 0.75, "SCHD": 0.15, "GLD": 0.05, "IEF": 0.05, "SOFR": 0.0,
+    },
+    "CAUTION": {
+        "QQQ": 0.50, "SCHD": 0.18, "GLD": 0.12, "IEF": 0.15, "SOFR": 0.05,
+    },
+    "DEFENSE": {
+        "QQQ": 0.25, "SCHD": 0.20, "GLD": 0.20, "IEF": 0.25, "SOFR": 0.10,
+    },
+    "CRISIS": {
+        "QQQ": 0.0,  "SCHD": 0.20, "GLD": 0.30, "IEF": 0.25, "SOFR": 0.25,
+    },
+}
+
 # 비중 합 = 1 검증
 for _regime, _w in WEIGHT_MAP.items():
     assert abs(sum(_w.values()) - 1.0) < 1e-9, f"WEIGHT_MAP[{_regime}] 합 != 1"
+for _regime, _w in WEIGHT_MAP_CAUTION.items():
+    assert abs(sum(_w.values()) - 1.0) < 1e-9, f"WEIGHT_MAP_CAUTION[{_regime}] 합 != 1"
 
 
 # ==========================================
@@ -313,6 +334,163 @@ def classify_regime(
     regime[score < cfg.attack_threshold]  = "ATTACK"
     regime[score >= cfg.crisis_threshold] = "CRISIS"
     return regime
+
+
+def classify_regime_caution(
+    score: pd.Series,
+    caution_threshold: float = 0.8,
+    cfg: BaselineConfig = DEFAULT_CONFIG,
+) -> pd.Series:
+    """
+    4-class: ATTACK / CAUTION / DEFENSE / CRISIS.
+
+    CAUTION: 점수가 ATTACK 임계 가까이 올라옴 (과매수 경계).
+    부드러운 비중 감소를 위한 버퍼 구간.
+
+    [근거]
+    - Black & Litterman (1992): 시그널 강도에 비례한 비중 조정
+    - 본인 사용자 요구: ATTACK -> DEFENSE 절벽 완화
+
+    Parameters
+    ----------
+    caution_threshold : float
+        CAUTION 진입 임계값. AI 판단 (기본 0.8).
+        점수 0.8~1.5 구간을 CAUTION으로.
+
+    Returns
+    -------
+    pd.Series
+        values: 'ATTACK' | 'CAUTION' | 'DEFENSE' | 'CRISIS'
+    """
+    regime = pd.Series("DEFENSE", index=score.index, name="regime")
+    regime[score < caution_threshold]     = "ATTACK"
+    regime[(score >= caution_threshold) & (score < cfg.attack_threshold)] = "CAUTION"
+    regime[score >= cfg.crisis_threshold] = "CRISIS"
+    return regime
+
+
+def classify_regime_rsi_filter(
+    score: pd.Series,
+    features: pd.DataFrame,
+    rsi_threshold: float = 75.0,
+    ma_dist_threshold: float = 0.15,
+    cfg: BaselineConfig = DEFAULT_CONFIG,
+) -> pd.Series:
+    """
+    RSI 기반 과열 필터 (최종 판단 필터).
+
+    [설계 원칙]
+    - 1단계: 기존 Baseline 점수로 국면 판정 (변경 없음)
+    - 2단계: ATTACK 국면 중 RSI + MA200 거리 동시 극단 → CAUTION 격하
+    - DEFENSE/CRISIS는 건드리지 않음
+
+    [근거]
+    - Wilder (1978): RSI 70 이상 과매수 신호
+    - Connors & Alvarez (2008): RSI 75+ 단기 고점 신호
+    - MA200 거리 +15%: 추세 과도 이탈 (Faber 2007 연장)
+    - 두 조건 AND: false positive 최소화 (AI 판단)
+
+    [CAUTION 비중]
+    - QQQ 50% (ATTACK 75%와 DEFENSE 25% 중간)
+    - 나머지는 WEIGHT_MAP_CAUTION 참조
+
+    Parameters
+    ----------
+    rsi_threshold : float
+        RSI 과열 임계값. 기본 75.0 (AI 판단, Wilder 70보다 보수적).
+    ma_dist_threshold : float
+        MA200 거리 임계값. 기본 +15% (AI 판단).
+
+    Returns
+    -------
+    pd.Series
+        values: 'ATTACK' | 'CAUTION' | 'DEFENSE' | 'CRISIS'
+    """
+    # 1단계: 기존 Baseline 국면
+    regime = classify_regime(score, cfg)
+
+    # 2단계: 과열 조건 계산
+    # rsi_QQQ, dist_ma200_QQQ 둘 다 features에 있음
+    if "rsi_QQQ" not in features.columns or "dist_ma200_QQQ" not in features.columns:
+        return regime  # 피처 없으면 그대로
+
+    common_idx = regime.index.intersection(features.index)
+    rsi     = features.loc[common_idx, "rsi_QQQ"]
+    ma_dist = features.loc[common_idx, "dist_ma200_QQQ"]
+
+    # 과열 조건: RSI > 75 AND MA200 거리 > +15% (동시 충족)
+    overheated = (rsi > rsi_threshold) & (ma_dist > ma_dist_threshold)
+
+    # ATTACK 국면에서만 CAUTION으로 격하
+    result = regime.copy()
+    result.loc[common_idx] = regime.loc[common_idx].copy()
+    caution_mask = (regime.loc[common_idx] == "ATTACK") & overheated
+    result.loc[common_idx[caution_mask]] = "CAUTION"
+
+    return result
+
+
+def classify_regime_naaim_filter(
+    score: pd.Series,
+    naaim_path: str = "data/naaim.xlsx",
+    naaim_threshold: float = 90.0,
+    naaim_window: int = 20,
+    cfg: BaselineConfig = DEFAULT_CONFIG,
+) -> pd.Series:
+    """
+    NAAIM Exposure Index 기반 과열 필터 (최종 판단 필터).
+
+    [설계 원칙]
+    - 1단계: 기존 Baseline 점수로 국면 판정 (변경 없음)
+    - 2단계: ATTACK 국면 중 NAAIM 4주 평균 > 90 → CAUTION 격하
+    - DEFENSE/CRISIS는 건드리지 않음
+
+    [근거]
+    - NAAIM: 액티브 펀드매니저 실제 주식 익스포저 (0~200%)
+    - 4주 평균 > 90: 펀드매니저 대부분이 풀 베팅 = 과열
+    - 발동 빈도: 12.4% (RSI 필터 2.8%보다 많음)
+    - 데이터: 2006~현재, 주간 발표 (NAAIM.org 무료)
+
+    Parameters
+    ----------
+    naaim_threshold : float
+        과열 임계값. 기본 90.0 (AI 판단, 상위 ~12%).
+    naaim_window : int
+        이동평균 윈도우 (영업일). 기본 20 (4주).
+    """
+    # 1단계: 기존 Baseline 국면
+    regime = classify_regime(score, cfg)
+
+    # NAAIM 데이터 로드
+    try:
+        df_n = pd.read_excel(naaim_path)
+        df_n = df_n[['Date', 'NAAIM Number']].dropna()
+        df_n['Date'] = pd.to_datetime(df_n['Date'])
+        df_n = df_n.drop_duplicates('Date').sort_values('Date')
+        df_n = df_n.set_index('Date')
+
+        # 주간 → 일별 forward fill
+        idx = pd.date_range(df_n.index.min(), df_n.index.max(), freq='B')
+        df_daily = df_n.reindex(idx).ffill()
+
+        # 4주 이동평균 + look-ahead bias 방지 (shift 1)
+        naaim_4w = df_daily['NAAIM Number'].rolling(naaim_window).mean().shift(1)
+        naaim_4w.index = pd.DatetimeIndex(naaim_4w.index)
+
+    except Exception as e:
+        print(f"[NAAIM 로드 실패] {e}")
+        return regime
+
+    # 공통 인덱스
+    common_idx = regime.index.intersection(naaim_4w.index)
+    overheated = naaim_4w.loc[common_idx] > naaim_threshold
+
+    # ATTACK 국면에서만 CAUTION으로 격하
+    result = regime.copy()
+    caution_mask = (regime.loc[common_idx] == "ATTACK") & overheated
+    result.loc[common_idx[caution_mask]] = "CAUTION"
+
+    return result
 
 
 def classify_regime_4class(
